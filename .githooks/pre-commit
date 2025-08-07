@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BLOCK_PATTERNS='(^/Users/|^/home/|^/var/|^/tmp/|^/private/|^/Volumes/|^/mnt/|^/etc/|^/opt/|^/Applications/ )'
+
+# Staged files (relative paths)
+FILES=$(git diff --cached --name-only)
+
+WARN_DOC_OUTSIDE=0
+VIOLATIONS=0
+
+while IFS= read -r f; do
+  if echo "$f" | grep -Eq "$BLOCK_PATTERNS"; then
+    echo "ERROR: Forbidden absolute path detected: $f"
+    VIOLATIONS=1
+  fi
+
+  case "$f" in
+    *.md|*.adoc|*.rst)
+      if [[ "$f" != docs/* ]]; then
+        echo "WARNING: Documentation file is not under docs/: $f"
+        WARN_DOC_OUTSIDE=1
+      fi
+      ;;
+  esac
+done < <(printf '%s\n' "$FILES")
+
+if [ "$VIOLATIONS" -ne 0 ]; then
+  echo "Commit blocked by project policy."
+  exit 1
+fi
+
+if [ "$WARN_DOC_OUTSIDE" -ne 0 ]; then
+  echo "Note: Consider moving documentation files under docs/."
+fi
