@@ -1,0 +1,35 @@
+name: GQA Smoke CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  gqa-smoke:
+    name: GQA Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit test
+        run: npx tsx tests/unit/gqa/pattern_engine.spec.ts
+
+      - name: Run GQA smoke script
+        run: npx tsx scripts/run-gqa-smoke.ts
+
+      - name: Upload smoke results
+        uses: actions/upload-artifact@v4
+        with:
+          name: gqa-smoke-results
+          path: gqa-smoke-results.json

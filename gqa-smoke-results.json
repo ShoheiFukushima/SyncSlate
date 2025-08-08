@@ -1,0 +1,24 @@
+{
+  "cacheKey": "smoke-sample-1",
+  "duration1": 2,
+  "duration2": 0,
+  "cacheHit": true,
+  "opsCounts1": {
+    "dynamic": 4,
+    "narrative": 4,
+    "hybrid": 4
+  },
+  "opsCounts2": {
+    "dynamic": 4,
+    "narrative": 4,
+    "hybrid": 4
+  },
+  "meta1": {
+    "cacheKey": "smoke-sample-1",
+    "generatedAt": "2025-08-08T19:54:05.984Z"
+  },
+  "meta2": {
+    "cacheKey": "smoke-sample-1",
+    "generatedAt": "2025-08-08T19:54:05.985Z"
+  }
+}

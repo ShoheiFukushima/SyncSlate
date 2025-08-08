@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "./dist-main",
+    "rootDir": ".",
+    "strict": true,
+    "lib": ["ES2022"],
+    "types": ["node", "electron"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["main/**/*.ts", "shared/**/*.ts"],
+  "exclude": ["renderer", "dist", "node_modules", "preload"]
+}

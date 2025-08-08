@@ -1,0 +1,23 @@
+{
+  "pattern": "dynamic_cut",
+  "subscores": {
+    "sync": 0.92,
+    "semantic": 0.9,
+    "visual": 0.88,
+    "stability": 0.87
+  },
+  "aggregateConfidence": 0.893,
+  "reasons": [
+    "音楽同期: P95 ≤ 3フレーム",
+    "編集リズム: 最小ショット長遵守",
+    "歌詞テロップ: 文字数/表示時間適正",
+    "出力XML: スキーマ検証通過",
+    "パフォーマンス: メモリ閾値内"
+  ],
+  "warnings": [],
+  "project_seed": 123456789,
+  "meta": {
+    "mode": "demo-pass",
+    "timestamp": "2025-08-08T20:10:00.326Z"
+  }
+}

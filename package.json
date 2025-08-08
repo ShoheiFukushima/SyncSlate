@@ -1,0 +1,41 @@
+{
+  "name": "autoedittate",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AutoEditTATE - Electron + React + TypeScript + Rust (napi-rs) skeleton",
+  "main": "app/dist-main/main/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -r \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "cd app/renderer && vite",
+    "dev:electron": "wait-on tcp:5173 && npm run build:electron && electron .",
+    "build": "npm run build:renderer && npm run build:electron && electron-builder -c electron-builder.yml",
+    "build:renderer": "cd app/renderer && vite build",
+    "build:electron": "tsc -p app/tsconfig.main.json && mv app/dist-main/main/main.js app/dist-main/main/main.cjs",
+    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs",
+    "typecheck": "tsc -p app/tsconfig.main.json && tsc -p app/renderer/tsconfig.json --noEmit",
+    "postinstall": "echo \"skip native build in postinstall\"",
+    "build:native": "echo \"native build skipped (no rust-core)\""
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "concurrently": "^9.1.0",
+    "electron": "^30.0.9",
+    "electron-builder": "^24.13.3",
+    "eslint": "^9.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.35.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.1",
+    "wait-on": "^8.0.2"
+  }
+}
