@@ -33,27 +33,48 @@ async function main() {
     assert.strictEqual(parsed1.token, '[REDACTED]', 'token must be redacted in saved file');
     assert.strictEqual(parsed1.self, '[Circular]', 'circular reference must be encoded as [Circular]');
 
-    // Test 2: simulate write failure by monkeypatching fs.writeFile
-    const fsProm = await import('fs/promises');
-    const origWrite = (fsProm as any).writeFile;
-    // monkeypatch writeFile to throw
-    (fsProm as any).writeFile = async () => { throw new Error('simulated-write-failure'); };
-
+    // Test 2: simulate write failure by making the target outDir non-writable (permissions)
+    // Note: we avoid reassigning properties on ESM module namespace objects (read-only).
+    const outDir2 = path.join(process.cwd(), 'tmp', 'obs-test', 'explain-fail-' + Date.now());
+    await fs.rm(outDir2, { recursive: true, force: true });
+    await fs.mkdir(outDir2, { recursive: true });
+ 
+    // Preserve original permission bits so we can restore later
+    let origMode = 0o755;
+    try {
+      const st = await fs.stat(outDir2);
+      origMode = st.mode & 0o777;
+    } catch {
+      // ignore if stat fails; origMode stays as default
+    }
+ 
+    // Make directory non-writable to provoke a write failure (chmod to 000)
+    try {
+      await fs.chmod(outDir2, 0o000);
+    } catch (e) {
+      // If chmod is not supported in this environment, log and fall through;
+      // the test will then attempt the write and may not fail, in which case
+      // the test will surface that.
+      // eslint-disable-next-line no-console
+      console.warn('explainSink.spec: chmod failed or not permitted; write-failure simulation may not run', String(e));
+    }
+ 
     let threw = false;
     try {
-      const outDir2 = path.join(process.cwd(), 'tmp', 'obs-test', 'explain-fail-' + Date.now());
-      await fs.mkdir(outDir2, { recursive: true });
       await storeExplain({ project_seed: 999 }, { outDir: outDir2 });
     } catch (err: any) {
       threw = true;
-      // ensure error contains our simulated message or underlying error
+      // Ensure we received an Error; message varies by platform (EACCES, EPERM, etc.)
       assert(err instanceof Error, 'error should be thrown on write failure');
-      assert(err.message.includes('simulated-write-failure'), 'error message should include simulated reason');
     } finally {
-      // restore original writeFile
-      (fsProm as any).writeFile = origWrite;
+      // Restore original permissions so cleanup is possible
+      try {
+        await fs.chmod(outDir2, origMode);
+      } catch {
+        // ignore restore errors
+      }
     }
-    if (!threw) throw new Error('expected storeExplain to throw when writeFile is stubbed');
+    if (!threw) throw new Error('expected storeExplain to throw when directory is not writable');
 
     console.log('ExplainSink unit tests passed.');
   } catch (err) {
