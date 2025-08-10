@@ -1,0 +1,24 @@
+appId: com.autoedittate.app
+productName: AutoEditTATE
+directories:
+  output: build
+files:
+  - "app/dist-main/**/*"
+  - "app/renderer/dist/**/*"
+  - "node_modules/**/*"
+  - "package.json"
+mac:
+  target:
+    - dmg
+  category: public.app-category.video
+  hardenedRuntime: false
+  gatekeeperAssess: false
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage
+asar: true
+extraMetadata:
+  main: "app/dist-main/main/main.cjs"

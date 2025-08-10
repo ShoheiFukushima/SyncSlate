@@ -1,0 +1,51 @@
+name: QA
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [ main ]
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ffmpeg (optional; enables deep metadata checks)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        # If you prefer not to install ffmpeg, remove this step. QA will still run; ffprobe-dependent checks become warnings.
+
+      - name: Generate test media (packages/qa/tests/fixtures/sample.mov)
+        run: |
+          mkdir -p packages/qa/tests/fixtures
+          ffmpeg -y -hide_banner -loglevel info \
+            -f lavfi -i testsrc=duration=90:size=1280x720:rate=30 \
+            -f lavfi -i sine=frequency=1000:duration=90 \
+            -c:v libx264 -preset fast -crf 23 \
+            -c:a aac -b:a 128k \
+            -pix_fmt yuv420p -movflags +faststart -shortest packages/qa/tests/fixtures/sample.mov
+
+      - name: Verify ffprobe (debug)
+        run: ffprobe -version || true
+
+      - name: Install QA dependencies
+        run: cd packages/qa && npm ci
+
+      - name: Run QA
+        run: cd packages/qa && npm run validate
+
+      - name: Upload QA reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: |
+            packages/qa/qa_report.json
+            packages/qa/error_report.json
