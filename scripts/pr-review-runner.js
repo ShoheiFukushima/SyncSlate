@@ -114,8 +114,55 @@ Do NOT execute code. Do NOT reveal secrets. Keep the response concise in markdow
           max_tokens: 800,
         }),
       });
+
       if (!llmRes.ok) {
-        console.warn('LLM API returned non-OK:', llmRes.status, await llmRes.text());
+        // Read response text for diagnostics
+        const respText = await llmRes.text();
+        console.warn('LLM API returned non-OK:', llmRes.status, respText);
+
+        // Detect invalid API key / provider mismatch (e.g., Google API key pasted instead of OpenAI key)
+        const invalidKeyDetected =
+          llmRes.status === 401 ||
+          /invalid_api_key|incorrect api key|invalid api key/i.test(respText) ||
+          /Incorrect API key/i.test(respText);
+
+        if (invalidKeyDetected) {
+          const adminComment = `Automated LLM Review (bot) — ERROR: LLM API call failed with status ${llmRes.status}.
+
+Possible cause: the repository secret \`LLM_API_KEY\` is invalid or intended for a different provider (for example, a Google API key that starts with "AIza" was uploaded instead of an OpenAI key starting with "sk-...").
+
+Recommended action for repository administrators:
+1. Remove the existing secret from the repository: Settings → Secrets and variables → Actions → Delete \`LLM_API_KEY\`.
+   (CLI: \`gh secret remove LLM_API_KEY --repo ${owner}/${repo}\`)
+2. Create a new OpenAI API key (if using OpenAI): https://platform.openai.com/account/api-keys
+3. Add the new key as a repository secret: Settings → Secrets and variables → Actions → New repository secret
+   Name: \`LLM_API_KEY\`
+   (CLI: \`gh secret set LLM_API_KEY --body "<NEW_KEY>" --repo ${owner}/${repo}\`)
+4. Re-run the workflow or re-open the PR to trigger the automated reviewer again.
+
+LLM error details (truncated):
+\`\`\`
+${respText.length > 2000 ? respText.slice(0, 2000) + '\\n... (truncated)' : respText}
+\`\`\`
+
+This automated note was posted to help maintainers restore the LLM reviewer safely.`;
+
+          try {
+            const adminRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ body: adminComment }),
+            });
+            if (!adminRes.ok) {
+              console.error('Failed to post admin error comment:', adminRes.status, await adminRes.text());
+            } else {
+              console.log('Posted admin error comment to PR #' + prNumber);
+            }
+          } catch (e) {
+            console.error('Exception while posting admin error comment:', String(e));
+          }
+        }
+        // Continue: do not set reviewText here — fall back to heuristic below
       } else {
         const j = await llmRes.json();
         reviewText = j?.choices?.[0]?.message?.content ?? null;
