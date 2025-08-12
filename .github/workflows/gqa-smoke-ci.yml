@@ -22,7 +22,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run unit test
+      - name: Run obs unit tests - logger (capture output)
+        run: |
+          mkdir -p /tmp
+          npx tsx tests/unit/obs/logger.spec.ts > /tmp/logger_spec_output.txt 2>&1 || echo "logger test exited $?" >> /tmp/logger_spec_output.txt
+        continue-on-error: true
+
+      - name: Run obs unit tests - explainSink (capture output)
+        run: |
+          mkdir -p /tmp
+          npx tsx tests/unit/obs/explainSink.spec.ts > /tmp/explain_spec_output.txt 2>&1 || echo "explain test exited $?" >> /tmp/explain_spec_output.txt
+        continue-on-error: true
+
+      - name: Run unit test - PatternQueryEngine
         run: npx tsx tests/unit/gqa/pattern_engine.spec.ts
 
       - name: Run GQA smoke script
@@ -33,3 +45,16 @@ jobs:
         with:
           name: gqa-smoke-results
           path: gqa-smoke-results.json
+          if-no-files-found: warn
+
+      - name: Upload obs test logs and explain artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-artifacts
+          path: |
+            /tmp/logger_spec_output.txt
+            /tmp/explain_spec_output.txt
+            obs/explain
+            obs/logs
+          if-no-files-found: warn

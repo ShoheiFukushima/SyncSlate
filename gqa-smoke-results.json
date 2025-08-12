@@ -1,24 +1,67 @@
 {
   "cacheKey": "smoke-sample-1",
-  "duration1": 2,
-  "duration2": 0,
-  "cacheHit": true,
-  "opsCounts1": {
-    "dynamic": 4,
-    "narrative": 4,
-    "hybrid": 4
-  },
-  "opsCounts2": {
-    "dynamic": 4,
-    "narrative": 4,
-    "hybrid": 4
-  },
-  "meta1": {
-    "cacheKey": "smoke-sample-1",
-    "generatedAt": "2025-08-08T19:54:05.984Z"
-  },
-  "meta2": {
-    "cacheKey": "smoke-sample-1",
-    "generatedAt": "2025-08-08T19:54:05.985Z"
+  "runs": 5,
+  "runDetails": [
+    {
+      "run": 1,
+      "durationMs": 1.480708,
+      "hasBefore": false,
+      "hasAfter": true,
+      "storeSize": 1,
+      "storeApproxBytes": 704,
+      "cacheKeyUsed": "smoke-sample-1"
+    },
+    {
+      "run": 2,
+      "durationMs": 0.05475,
+      "hasBefore": true,
+      "hasAfter": true,
+      "storeSize": 1,
+      "storeApproxBytes": 704,
+      "cacheKeyUsed": "smoke-sample-1"
+    },
+    {
+      "run": 3,
+      "durationMs": 0.034792,
+      "hasBefore": true,
+      "hasAfter": true,
+      "storeSize": 1,
+      "storeApproxBytes": 704,
+      "cacheKeyUsed": "smoke-sample-1"
+    },
+    {
+      "run": 4,
+      "durationMs": 0.018,
+      "hasBefore": true,
+      "hasAfter": true,
+      "storeSize": 1,
+      "storeApproxBytes": 704,
+      "cacheKeyUsed": "smoke-sample-1"
+    },
+    {
+      "run": 5,
+      "durationMs": 0.013125,
+      "hasBefore": true,
+      "hasAfter": true,
+      "storeSize": 1,
+      "storeApproxBytes": 704,
+      "cacheKeyUsed": "smoke-sample-1"
+    }
+  ],
+  "durations": [
+    1.480708,
+    0.05475,
+    0.034792,
+    0.018,
+    0.013125
+  ],
+  "firstDuration": 1.480708,
+  "medianLater": 0.026395999999999996,
+  "meanLater": 0.03016675,
+  "cacheHitsBefore": 4,
+  "cacheHitsAfter": 5,
+  "storeInfo": {
+    "entries": 1,
+    "approximateBytes": 704
   }
 }
