@@ -14,6 +14,8 @@
     "build:electron": "tsc -p app/tsconfig.main.json && mv app/dist-main/main/main.js app/dist-main/main/main.cjs",
     "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs",
     "typecheck": "tsc -p app/tsconfig.main.json && tsc -p app/renderer/tsconfig.json --noEmit",
+    "pr-review:local": "GITHUB_REPOSITORY=ShoheiFukushima/AutoEditTATE node scripts/pr-review-runner.js --local --event tmp/pr-event-local.json",
+    "pr-review:local:post": "GITHUB_REPOSITORY=ShoheiFukushima/AutoEditTATE node scripts/pr-review-runner.js --local --event tmp/pr-event-local.json --post",
     "postinstall": "echo \"skip native build in postinstall\"",
     "build:native": "cd native/rust-core && napi build --platform --release"
   },
