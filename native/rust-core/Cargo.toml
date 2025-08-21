@@ -1,0 +1,14 @@
+[package]
+name = "rust-core"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+napi-build = "2.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2.15.2", default-features = false, features = ["napi4"] }
+napi-derive = "2.15.2"
