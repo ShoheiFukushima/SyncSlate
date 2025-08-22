@@ -1,0 +1,109 @@
+# AutoEditTATE 時間軸別マッチング設定
+# 各セグメントの戦略と重み付けを定義
+
+segments:
+  opening:
+    label: "オープニング（フック）"
+    range: [0, 3000]  # ミリ秒
+    weights:
+      visual: 0.5      # 視覚的インパクト優先
+      sync: 0.2        # リズム同期
+      semantic: 0.2    # 意味的な繋がり
+      stability: 0.1   # 安定性
+    constraints:
+      minimumShotLength: 500     # 最低ショット長（ms）
+      maximumShotLength: 3000    # 最大ショット長（ms）
+      preferHeroShots: true      # ヒーローショット優先
+      requiredVisualChange: 0.4  # 必要な視覚変化率
+
+  development:
+    label: "展開部（エンゲージメント）"
+    range: [3000, 10000]
+    weights:
+      sync: 0.4        # リズム同期優先
+      visual: 0.3
+      semantic: 0.2
+      stability: 0.1
+    constraints:
+      minimumShotLength: 800
+      maximumShotLength: 4000
+      beatSyncTolerance: 100    # ビート同期許容誤差（ms）
+      transitionEnergy: 0.3     # トランジション強度
+
+  middle:
+    label: "中盤（ストーリー展開）"
+    range: [10000, 30000]
+    weights:
+      semantic: 0.35   # 意味的な流れ優先
+      sync: 0.25
+      visual: 0.25
+      stability: 0.15
+    constraints:
+      minimumShotLength: 1000
+      maximumShotLength: 5000
+      narrativeCoherence: 0.7   # 物語性の一貫性
+      allowSlowMotion: true      # スローモーション許可
+
+  climax:
+    label: "クライマックス"
+    range: [30000, 50000]
+    weights:
+      sync: 0.4        # 音楽との同期優先
+      visual: 0.35     # 視覚的インパクト
+      semantic: 0.15
+      stability: 0.1
+    constraints:
+      minimumShotLength: 600
+      maximumShotLength: 3000
+      intensityThreshold: 0.7   # 強度閾値
+      emotionalPeak: true       # 感情的ピーク
+
+  ending:
+    label: "エンディング（余韻とループ準備）"
+    range: [50000, 60000]
+    weights:
+      stability: 0.35  # 安定性優先
+      visual: 0.3
+      semantic: 0.25
+      sync: 0.1
+    constraints:
+      minimumShotLength: 1500
+      maximumShotLength: 10000
+      fadeOutOption: true       # フェードアウトオプション
+      loopReady: true          # ループ対応
+
+# 動的調整ルール
+adjustments:
+  - condition: "music.phase == 'chorus'"
+    description: "サビ部分での同期強化"
+    multiply:
+      sync: 1.5
+      visual: 1.2
+  
+  - condition: "music.intensity > 0.8"
+    description: "高強度部分でのカット頻度増加"
+    modify:
+      constraints.minimumShotLength: 0.7  # 70%に短縮
+  
+  - condition: "video.sceneCount < 5"
+    description: "シーン数が少ない場合の安定性向上"
+    multiply:
+      stability: 1.3
+      semantic: 1.2
+
+# 30%変化の法則
+transitionRules:
+  minimumChange: 0.3  # 最低変化率
+  dimensions:
+    - position   # 位置の変化
+    - size       # サイズの変化
+    - color      # 色調の変化
+    - motion     # 動きの変化
+  enforcement: strict  # strict | flexible | off
+
+# パフォーマンス設定
+performance:
+  parallelAnalysis: true
+  cacheResults: true
+  maxMemoryUsage: 2048  # MB
+  targetProcessingTime: 300  # 秒（5分）

@@ -108,7 +108,7 @@ AutoEditTATEは、Windows/Mac向けのインストール型デスクトップア
 - ビルド/CI:
   - Node: LTS
   - Rust: Stable
-  - CIでマルチプラットフォームビルド（GitHub Actions想定）
+  - マルチプラットフォームビルド環境
 - アップデート:
   - 起動時/手動チェックで更新確認
   - 差分パッチ適用

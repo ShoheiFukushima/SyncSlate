@@ -1,23 +1,35 @@
 {
-  "name": "autoedittate",
+  "name": "autoedit-tate",
   "private": true,
-  "version": "0.1.0",
-  "description": "AutoEditTATE - Electron + React + TypeScript + Rust (napi-rs) skeleton",
-  "main": "app/dist-main/main/main.cjs",
+  "version": "1.0.0",
+  "description": "AI-powered automatic video editing system for SNS content (60 seconds or less)",
+  "main": "packages/electron/dist/main.js",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "packages/analysis/*",
+    "packages/io/*", 
+    "packages/qa/*"
+  ],
   "scripts": {
     "dev": "concurrently -k -r \"npm:dev:renderer\" \"npm:dev:electron\"",
-    "dev:renderer": "cd app/renderer && vite",
-    "dev:electron": "wait-on tcp:5173 && npm run build:native && npm run build:electron && electron .",
-    "build": "npm run build:renderer && npm run build:native && npm run build:electron && electron-builder -c electron-builder.yml",
-    "build:renderer": "cd app/renderer && vite build",
-    "build:electron": "tsc -p app/tsconfig.main.json && mv app/dist-main/main/main.js app/dist-main/main/main.cjs",
-    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs",
-    "typecheck": "tsc -p app/tsconfig.main.json && tsc -p app/renderer/tsconfig.json --noEmit",
+    "dev:renderer": "cd packages/renderer && npm run dev",
+    "dev:electron": "wait-on tcp:3000 && npm run build:packages && cd packages/electron && npm run dev",
+    "build": "npm run build:packages && npm run build:electron && npm run build:renderer && npm run pack",
+    "build:packages": "npm run build --workspaces --if-present",
+    "build:renderer": "cd packages/renderer && npm run build",
+    "build:electron": "cd packages/electron && npm run build",
+    "start": "cd packages/electron && npm start",
+    "pack": "cd packages/electron && npm run pack",
+    "dist": "cd packages/electron && npm run dist",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint packages/*/src --ext .ts,.tsx --report-unused-disable-directives",
+    "typecheck": "npm run build:packages",
+    "clean": "find packages -name 'dist' -type d -exec rm -rf {} + 2>/dev/null || true",
+    "install:all": "npm install --workspaces",
     "pr-review:local": "GITHUB_REPOSITORY=ShoheiFukushima/AutoEditTATE node scripts/pr-review-runner.js --local --event tmp/pr-event-local.json",
     "pr-review:local:post": "GITHUB_REPOSITORY=ShoheiFukushima/AutoEditTATE node scripts/pr-review-runner.js --local --event tmp/pr-event-local.json --post",
-    "postinstall": "echo \"skip native build in postinstall\"",
-    "build:native": "cd native/rust-core && napi build --platform --release"
+    "postinstall": "echo 'Installation complete'"
   },
   "dependencies": {
     "electron-updater": "^6.3.9",
@@ -25,7 +37,6 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.18.0",
     "@types/node": "^22.5.4",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

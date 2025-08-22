@@ -1,0 +1,24 @@
+{
+  "name": "@autoedittate/xml-io",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@autoedittate/matching": "file:../../matching",
+    "@autoedittate/video-analysis": "file:../../analysis/video",
+    "xml2js": "^0.6.2",
+    "xmlbuilder2": "^3.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/xml2js": "^0.4.14",
+    "typescript": "^5.5.4",
+    "vitest": "^1.2.0"
+  }
+}

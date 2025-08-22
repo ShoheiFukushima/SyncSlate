@@ -67,12 +67,11 @@ if (aggregateConfidence >= 0.88) {
 }
 ```
 
-### CI/CD統合
-```yaml
+### QAスイート実行
+```bash
 # 必須: QAゲート
-- name: Run QA Suite
-  run: npx tsx qa-runner.ts
-  # continue-on-error: false ← 絶対にfalse
+npx tsx qa-runner.ts
+# エラー時は必ず停止
 ```
 
 ## なぜこの思想なのか

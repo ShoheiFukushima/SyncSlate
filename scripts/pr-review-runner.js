@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import fs from 'fs/promises';
 import process from 'process';
+import { execSync } from 'child_process';
+import { scrubPatch, isLikelySecretLine } from './pr-review-utils.js';
 
 /**
  * scripts/pr-review-runner.js
@@ -18,12 +20,22 @@ import process from 'process';
  *   - GITHUB_REPOSITORY (owner/repo)
  *   - GITHUB_TOKEN (permission to comment on PR)
  *   - LLM_API_KEY (optional) for OpenAI-compatible API
+ *
+ * Local mode:
+ *  - Pass `--local` to avoid calling GitHub API. In local mode the script will compute diffs using `git` (HEAD vs base branch) using the event JSON (GITHUB_EVENT_PATH) or the --event <path> option.
+ *  - By default local mode will not post comments to GitHub; pass `--post` to allow posting.
  */
 
+const args = process.argv.slice(2);
+const isLocal = args.includes('--local');
+const postInLocal = args.includes('--post');
+const eventArgIndex = args.findIndex(a => a === '--event');
+const eventPathArg = eventArgIndex >= 0 ? args[eventArgIndex + 1] : undefined;
+
 async function main() {
-  const eventPath = process.env.GITHUB_EVENT_PATH;
+  const eventPath = eventPathArg ?? process.env.GITHUB_EVENT_PATH;
   if (!eventPath) {
-    console.error('GITHUB_EVENT_PATH is not set');
+    console.error('GITHUB_EVENT_PATH is not set (or --event not provided)');
     process.exit(1);
   }
 
@@ -51,38 +63,80 @@ async function main() {
   const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
   const LLM_API_KEY = process.env.LLM_API_KEY;
 
-  if (!GITHUB_TOKEN) {
-    console.error('GITHUB_TOKEN not set');
+  if (!GITHUB_TOKEN && !isLocal) {
+    console.error('GITHUB_TOKEN not set (required unless --local)');
     process.exit(1);
   }
 
   const headers = {
-    'Authorization': `Bearer ${GITHUB_TOKEN}`,
+    'Authorization': `Bearer ${GITHUB_TOKEN ?? ''}`,
     'Accept': 'application/vnd.github+json',
     'User-Agent': 'auto-pr-reviewer'
   };
 
-  // Collect changed files (up to 100 per page)
+  // Collect changed files (up to 100 per page). Supports local mode (--local).
   let files = [];
-  let page = 1;
-  while (true) {
-    const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files?page=${page}&per_page=100`;
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      console.error('Failed to list PR files:', res.status, await res.text());
-      process.exit(1);
+  if (isLocal) {
+    // Local mode: compute diffs using git. Requires event JSON path.
+    const localEvent = event;
+    const baseRef = localEvent.pull_request?.base?.ref ?? 'main';
+    let baseCandidate = `origin/${baseRef}`;
+    try {
+      execSync(`git rev-parse --verify ${baseCandidate}`, { stdio: 'ignore' });
+    } catch {
+      baseCandidate = baseRef;
     }
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) break;
-    files = files.concat(data);
-    if (data.length < 100) break;
-    page++;
+
+    let changedRaw = '';
+    try {
+      changedRaw = execSync(`git diff --name-only ${baseCandidate}...HEAD`).toString('utf8');
+    } catch (e) {
+      try {
+        changedRaw = execSync(`git diff --name-only ${baseCandidate}`).toString('utf8');
+      } catch (e2) {
+        console.error('Failed to get changed files via git diff:', String(e2));
+        process.exit(1);
+      }
+    }
+    const changedFiles = changedRaw.split(/\r?\n/).filter(Boolean).slice(0, 100);
+    files = await Promise.all(changedFiles.slice(0, 10).map(async (filename) => {
+      let patch = '';
+      try {
+        patch = execSync(`git diff ${baseCandidate}...HEAD -- ${filename}`).toString('utf8');
+      } catch {
+        try {
+          patch = execSync(`git show HEAD:${filename}`).toString('utf8');
+        } catch {
+          patch = '';
+        }
+      }
+      return { filename, patch };
+    }));
+  } else {
+    // Remote - GitHub API
+    let page = 1;
+    while (true) {
+      const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files?page=${page}&per_page=100`;
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        console.error('Failed to list PR files:', res.status, await res.text());
+        process.exit(1);
+      }
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      files = files.concat(data);
+      if (data.length < 100) break;
+      page++;
+    }
   }
 
   // Build compact diffs summary (limit size to avoid huge prompts)
+  // Use scrubPatch implemented in scripts/pr-review-utils.js (imported at top).
+  // This centralizes redaction logic and makes it testable.
+
   const fileSummaries = files.slice(0, 10).map(f => {
     const patch = f.patch ?? '';
-    const limited = patch.length > 4000 ? patch.slice(0, 4000) + '\n... (truncated)' : patch;
+    const limited = scrubPatch(patch);
     return `=== ${f.filename} ===\n${limited}`;
   });
 
@@ -116,16 +170,12 @@ Do NOT execute code. Do NOT reveal secrets. Keep the response concise in markdow
       });
 
       if (!llmRes.ok) {
-        // Read response text for diagnostics
         const respText = await llmRes.text();
         console.warn('LLM API returned non-OK:', llmRes.status, respText);
-
-        // Detect invalid API key / provider mismatch (e.g., Google API key pasted instead of OpenAI key)
         const invalidKeyDetected =
           llmRes.status === 401 ||
           /invalid_api_key|incorrect api key|invalid api key/i.test(respText) ||
           /Incorrect API key/i.test(respText);
-
         if (invalidKeyDetected) {
           const adminComment = `Automated LLM Review (bot) — ERROR: LLM API call failed with status ${llmRes.status}.
 
@@ -142,27 +192,29 @@ Recommended action for repository administrators:
 
 LLM error details (truncated):
 \`\`\`
-${respText.length > 2000 ? respText.slice(0, 2000) + '\\n... (truncated)' : respText}
+${respText.length > 2000 ? respText.slice(0, 2000) + '\n... (truncated)' : respText}
 \`\`\`
 
 This automated note was posted to help maintainers restore the LLM reviewer safely.`;
-
           try {
-            const adminRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({ body: adminComment }),
-            });
-            if (!adminRes.ok) {
-              console.error('Failed to post admin error comment:', adminRes.status, await adminRes.text());
+            if (isLocal && !postInLocal) {
+              console.log('Local mode - admin error comment (not posted):\n' + adminComment);
             } else {
-              console.log('Posted admin error comment to PR #' + prNumber);
+              const adminRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ body: adminComment }),
+              });
+              if (!adminRes.ok) {
+                console.error('Failed to post admin error comment:', adminRes.status, await adminRes.text());
+              } else {
+                console.log('Posted admin error comment to PR #' + prNumber);
+              }
             }
           } catch (e) {
             console.error('Exception while posting admin error comment:', String(e));
           }
         }
-        // Continue: do not set reviewText here — fall back to heuristic below
       } else {
         const j = await llmRes.json();
         reviewText = j?.choices?.[0]?.message?.content ?? null;
@@ -199,18 +251,23 @@ ${reviewText}
 
 *This comment was generated automatically by an automated reviewer. Treat suggestions as guidance and perform human review.*`;
 
-  const commentRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ body: commentBody }),
-  });
+  if (isLocal && !postInLocal) {
+    // In local mode without --post, just print the comment to stdout for inspection
+    console.log('Local mode - automated review (comment body):\n\n' + commentBody);
+  } else {
+    const commentRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ body: commentBody }),
+    });
 
-  if (!commentRes.ok) {
-    console.error('Failed to post comment:', commentRes.status, await commentRes.text());
-    process.exit(1);
+    if (!commentRes.ok) {
+      console.error('Failed to post comment:', commentRes.status, await commentRes.text());
+      process.exit(1);
+    }
+
+    console.log('Posted automated review comment to PR #' + prNumber);
   }
-
-  console.log('Posted automated review comment to PR #' + prNumber);
 }
 
 main().catch(err => {
