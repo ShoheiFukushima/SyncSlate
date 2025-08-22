@@ -92,7 +92,7 @@ Version: v0.1 / Date: 2025-08-07
 - CV/ML: OpenCV, MediaPipe, TFLite/ONNX（軽量モデル）
 - LLM/Vision: プロバイダ抽象（APIキー/レート制御/CB/Backoff）
 - XML処理: fast-xml-parser（FCPXML/Premiere XML）
-- テスト: Vitest（単体）, GitHub Actions（CI）, 往復テスト（roundtrip）
+- テスト: Vitest（単体）, ローカルQAスイート, 往復テスト（roundtrip）
 - 配布/環境: macOS/Windows対応、Node-AddonはCIでビルド
 
 ## 5. 目的関数と確信度（抜粋仕様）

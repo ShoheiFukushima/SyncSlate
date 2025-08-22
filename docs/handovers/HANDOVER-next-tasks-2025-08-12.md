@@ -29,7 +29,7 @@
    - 検証:
      - PR #4 をトリガしてログに 401/unauthorized が出ないことを確認
      - コマンド例（ワークフロー手動トリガ）:
-       - [`zsh()`](README.md:1) gh workflow run auto-pr-review.yml --repo ShoheiFukushima/AutoEditTATE
+       - [`zsh()`](README.md:1) npm run pr-review:local
      - または空コミットでブランチに push:
        - [`zsh()`](README.md:1) git commit --allow-empty -m "ci: trigger auto-pr-review (LLM key rotation test)" && git push origin chore/auto-pr-review
    - 成功条件: ワークフローで LLM 呼び出しが 200 を返す、PR に自動コメントが付く（期待される出力）
@@ -71,7 +71,7 @@
      - スモークの結果（`gqa-smoke-results.json`）を参照して、後続の中央値が第一回より速いかをルール化する（閾値）
    - 参考ファイル:
      - [`scripts/run-gqa-smoke.ts`](scripts/run-gqa-smoke.ts:1)
-     - ワークフロー: [`.github/workflows/qa-suite.yml`](.github/workflows/qa-suite.yml:1)
+     - QAスイート: [`scripts/run-gqa-smoke.ts`](scripts/run-gqa-smoke.ts:1)
    - 推定時間: 1–2 時間（CI のセットアップによる）
 
 5) 運用ドキュメントと runbook 作成（中〜低優先）
@@ -104,7 +104,7 @@
 - リモート上の lockfile 確認:
   - [`zsh()`](README.md:1) git fetch origin feature/gqa-ci-observability --depth=1 && git ls-tree -r origin/feature/gqa-ci-observability --name-only | grep packages/qa/package-lock.json
 - 空コミットでワークフローを再実行:
-  - [`zsh()`](README.md:1) git checkout feature/gqa-ci-observability && git -c user.name="AutoEditTATE CI Bot" -c user.email="ci-bot@example.com" commit --allow-empty -m "ci: trigger workflow (rerun with package-lock)" && git push origin feature/gqa-ci-observability
+  - [`zsh()`](README.md:1) npm run qa:smoke
 - ワークフローの run ログ取得:
   - [`zsh()`](README.md:1) gh run list --repo ShoheiFukushima/AutoEditTATE --branch feature/gqa-ci-observability --limit 10
   - [`zsh()`](README.md:1) gh run view <run-id> --repo ShoheiFukushima/AutoEditTATE --log

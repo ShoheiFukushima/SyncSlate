@@ -1,0 +1,22 @@
+{
+  "name": "@autoedittate/music-analysis",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@autoedittate/config": "file:../../config",
+    "@types/node": "^22.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/fluent-ffmpeg": "^2.1.24",
+    "typescript": "^5.5.4",
+    "vitest": "^1.2.0"
+  }
+}

@@ -50,7 +50,7 @@ Related: [docs/adr/ADR-001-architecture.md](docs/adr/ADR-001-architecture.md)
 - 言語/ランタイム: TypeScript/Node.js (BFF, 一部サービス), Go (高スループット/ワーカー)
 - フロントエンド: Next.js (App Router), next-intl
 - IaC: Terraform + Terragrunt (モジュール化)
-- CI/CD: GitHub Actions
+- ビルドツール: ローカル環境
 - 監視/可観測性: OpenTelemetry, Prometheus, Grafana, CloudWatch
 - セキュリティ: AWS KMS, Secrets Manager, WAF, Cognito or OIDC IdP
 
@@ -85,8 +85,8 @@ Related: [docs/adr/ADR-001-architecture.md](docs/adr/ADR-001-architecture.md)
   - PostgreSQL (RDS), Redis (ElastiCache), S3, OpenSearch
 - Async
   - SQS (標準/遅延)、Outbox パターンでイベント発行
-- Observability/CI/CD/Secrets
-  - OTel Collector, Prometheus/Grafana, GitHub Actions, KMS/Secrets Manager
+- Observability/Secrets
+  - OTel Collector, Prometheus/Grafana, KMS/Secrets Manager
 
 ## 9. コンポーネント設計 (C4: Component)
 - BFF/API
@@ -206,12 +206,12 @@ Related: [docs/adr/ADR-001-architecture.md](docs/adr/ADR-001-architecture.md)
 - アラート
   - ノイズ最小化、複合条件、オンコール体制、エスカレーション
 
-## 19. デプロイメント (Environments, CI/CD, IaC)
+## 19. デプロイメント (Environments, ビルド, IaC)
 - 環境
   - dev, stg, prod (+ sandbox)
 - IaC
   - Terraform modules、差分は tfvars/Terragrunt、State 保護、PR Plan 必須
-- CI/CD
+- ビルドパイプライン
   - Pipeline: build → unit/contract → SAST/DAST → image scan → deploy → smoke → canary → promote
   - 署名付きコンテナ、SBOM 生成、OPA (Conftest) による policy check
 

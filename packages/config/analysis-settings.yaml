@@ -1,0 +1,167 @@
+# AutoEditTATE 解析設定
+# 音楽・映像解析のパラメータ定義
+
+music:
+  analysis:
+    # 基本解析
+    extractBPM: true
+    extractBeats: true
+    extractOnsets: true
+    extractTempo: true
+    extractKey: true
+    
+    # 高度な解析
+    extractChroma: true
+    extractMFCC: true
+    extractSpectralCentroid: true
+    extractRMS: true
+    
+    # セグメント解析
+    detectSegments: true
+    detectChorus: true
+    detectVerse: true
+    
+  parameters:
+    # FFT設定
+    fftSize: 2048
+    hopLength: 512
+    sampleRate: 44100
+    
+    # ビート検出
+    beatTrackingMethod: "ellis"  # ellis | degara | crf
+    onsetMethod: "energy"  # energy | hfc | complex | phase
+    
+    # 相対値変換
+    normalization: true
+    dynamicRange: [0.0, 1.0]
+    
+  thresholds:
+    # 編集点検出閾値
+    onsetThreshold: 0.3
+    beatStrength: 0.5
+    tempoChangeThreshold: 0.1
+
+video:
+  analysis:
+    # 基本解析
+    extractShots: true
+    extractScenes: true
+    extractColors: true
+    extractMotion: true
+    extractFaces: true
+    
+    # 品質解析
+    detectBlur: true
+    detectShake: true
+    detectLighting: true
+    
+    # 構成解析
+    extractComposition: true
+    extractEdgeComplexity: true
+    extract30PercentChange: true
+    
+  parameters:
+    # フレーム解析
+    frameSkip: 5  # 5フレームごとに解析
+    shotDetectionThreshold: 0.3
+    sceneDetectionThreshold: 0.5
+    
+    # モーション解析
+    opticalFlowMethod: "farneback"  # farneback | lucas-kanade
+    motionVectorScale: 0.5
+    
+    # カラー解析
+    colorSpace: "hsv"  # rgb | hsv | lab
+    colorBins: 32
+    
+  quality:
+    # 品質基準
+    minimumSharpness: 0.3
+    maximumShake: 0.2
+    minimumLighting: 0.2
+    
+    # ヒーローショット判定
+    heroShotCriteria:
+      edgeComplexity: 0.7
+      sharpness: 0.8
+      composition: 0.6
+
+# 歌詞解析（将来拡張用）
+lyrics:
+  enabled: false
+  analysis:
+    extractTimestamps: true
+    extractSentiment: true
+    extractKeywords: true
+  
+  synchronization:
+    method: "forced_alignment"
+    tolerance: 100  # ms
+
+# マッチング設定
+matching:
+  # スコアリング
+  scoring:
+    method: "weighted_sum"  # weighted_sum | neural | rule_based
+    confidenceThreshold: 0.88
+    flexibilityRange: 0.1  # ±0.1秒の柔軟性
+    
+  # 最適化
+  optimization:
+    method: "dynamic_programming"  # greedy | dynamic_programming | genetic
+    iterations: 100
+    convergenceThreshold: 0.01
+    
+  # パターン生成
+  patterns:
+    - name: "dynamic_cut"
+      description: "ダイナミックカット（リズム重視）"
+      modifiers:
+        sync: 1.3
+        visual: 1.1
+        
+    - name: "narrative_flow"
+      description: "ナラティブフロー（ストーリー重視）"
+      modifiers:
+        semantic: 1.4
+        stability: 1.2
+        
+    - name: "hybrid_balance"
+      description: "ハイブリッドバランス（バランス型）"
+      modifiers:
+        all: 1.0  # デフォルト値
+
+# エクスポート設定
+export:
+  formats:
+    xml:
+      enabled: true
+      version: "premiere_2024"
+      includeMetadata: true
+      
+    json:
+      enabled: true
+      pretty: true
+      includeExplanation: true
+      
+  paths:
+    outputDirectory: "./output"
+    tempDirectory: "./temp"
+    cacheDirectory: "./cache"
+
+# システム設定
+system:
+  logging:
+    level: "info"  # debug | info | warn | error
+    file: "autoedittate.log"
+    console: true
+    
+  performance:
+    maxWorkers: 4
+    memoryLimit: 2048  # MB
+    gpuAcceleration: false
+    
+  validation:
+    strict: true
+    validateInput: true
+    validateOutput: true

@@ -11,7 +11,7 @@
 2. **QAスイート基盤 (60%)**
    - qa-runner.ts (PoC実装)
    - explain.jsonスキーマ定義
-   - CI/CD統合 (GitHub Actions)
+   - ローカル実行環境
    - observability層 (logger, explainSink)
 
 3. **ドメイン層 (30%)**

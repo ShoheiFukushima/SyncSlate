@@ -1,0 +1,22 @@
+{
+  "name": "@autoedittate/matching",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@autoedittate/config": "file:../config",
+    "@autoedittate/music-analysis": "file:../analysis/music",
+    "@autoedittate/video-analysis": "file:../analysis/video"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^5.5.4",
+    "vitest": "^1.2.0"
+  }
+}
