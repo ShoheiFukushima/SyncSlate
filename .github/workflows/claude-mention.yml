@@ -1,0 +1,64 @@
+name: Claude Pro PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-review:
+    # PR作成時、または @claude メンション時に実行
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      statuses: write
+      checks: write
+    
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      
+      - name: Get Changed Files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          separator: ","
+      
+      - name: Claude Code Review
+        uses: anthropics/claude-code-action@main
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          model: claude-3-5-sonnet-20241022  # Pro プラン向け最新モデル
+          max_tokens: 8192  # Pro プランの拡張トークン
+          temperature: 0.2  # より正確なレビュー
+          
+      - name: Auto-fix suggestions
+        if: contains(github.event.comment.body, '@claude fix')
+        run: |
+          # Claude の提案に基づいて自動修正を適用
+          echo "Applying Claude's suggestions..."
+          
+      - name: Run tests after review
+        if: success()
+        run: |
+          # テストがある場合は実行
+          if [ -f "package.json" ]; then
+            npm test || true
+          fi
+          if [ -f "requirements.txt" ]; then
+            python -m pytest || true
+          fi

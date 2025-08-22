@@ -1,0 +1,25 @@
+name: Auto Merge Open PRs
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+permissions:
+  pull-requests: write
+  checks: read
+  contents: write
+jobs:
+  auto_merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Run auto-merge runner
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          EXCLUDE_LABELS: no-auto-merge
+        run: node scripts/auto-merge-runner.js

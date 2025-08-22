@@ -1,7 +1,7 @@
 /**
  * packages/obs/src/explainSink.ts
  *
- * Lightweight explain.json sink (PoC).
+ * Lightweight explain.json sink (PoC -> hardened)
  * - saves explain objects to ./obs/explain/<timestamp>-<seed>-<basename>
  * - notifies local structured logger (packages/obs/src/logger.ts)
  *
@@ -9,34 +9,17 @@
  *   import { storeExplain } from '../../obs/src/explainSink';
  *   await storeExplain(explainObj, { source: 'qa-runner', path: 'qa-results/explain.json' });
  */
- 
 import fs from 'fs/promises';
 import path from 'path';
-import logger from './logger';
+import logger, { safeStringify, sanitizeObject } from './logger';
  
 export type StoreOptions = {
   source?: string;
   path?: string; // optional original path (e.g., qa-results/explain.json)
   outDir?: string; // optional override, defaults to ./obs/explain
-  redact?: boolean; // if true, redact sensitive keys when saving (optional)
+  redact?: boolean; // if true, redact sensitive keys when saving (optional, default true)
   correlationId?: string; // optional correlation id to include in saved metadata
 };
- 
-function safeStringify(obj: any, space?: number) {
-  try {
-    return JSON.stringify(obj, null, space);
-  } catch {
-    const seen = new WeakSet();
-    return JSON.stringify(obj, function (key, value) {
-      if (typeof value === 'object' && value !== null) {
-        if (seen.has(value)) return '[Circular]';
-        seen.add(value);
-      }
-      if (typeof key === 'string' && /(password|token|secret|auth|authorization)/i.test(key)) return '[REDACTED]';
-      return value;
-    }, space);
-  }
-}
  
 export async function storeExplain(explain: any, opts?: StoreOptions): Promise<string> {
   const outDir = opts?.outDir ?? path.join(process.cwd(), 'obs', 'explain');
@@ -54,10 +37,17 @@ export async function storeExplain(explain: any, opts?: StoreOptions): Promise<s
   const dest = path.join(outDir, safeBase);
  
   try {
-    const content = safeStringify(explain, 2);
+    // use shared safeStringify (redaction controlled by opts.redact)
+    const content = safeStringify(explain, 2, opts?.redact ?? true);
     await fs.writeFile(dest, content, 'utf8');
  
-    const meta: any = { dest, source: opts?.source ?? 'unknown', seed };
+    const meta: any = {
+      dest,
+      source: opts?.source ?? 'unknown',
+      seed,
+      service: process.env.SERVICE_NAME ?? 'qa',
+      env: process.env.NODE_ENV ?? 'production',
+    };
     if (opts?.correlationId) meta.correlationId = opts.correlationId;
     if (explain?.correlation_id) meta.correlationId = explain.correlation_id;
     // optionally include saved file size (best-effort)
@@ -68,7 +58,7 @@ export async function storeExplain(explain: any, opts?: StoreOptions): Promise<s
       // ignore stat error
     }
  
-    logger.info('explain.saved', meta);
+    logger.info('explain.saved', sanitizeObject(meta));
     return dest;
   } catch (err) {
     const errorMeta = err instanceof Error ? { message: err.message, stack: err.stack, code: (err as any).code } : { message: String(err) };
