@@ -1,0 +1,4 @@
+# Phase 2 additional requirements
+locust==2.17.0
+websocket-client==1.7.0
+psutil==5.9.8
