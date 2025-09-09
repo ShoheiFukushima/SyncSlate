@@ -1,0 +1,206 @@
+name: Claude-Gemini Auto Improvement Loop
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task for Claude to implement'
+        required: true
+        type: string
+      max_iterations:
+        description: 'Maximum improvement iterations'
+        required: false
+        default: '3'
+        type: string
+
+jobs:
+  auto-improvement-loop:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    
+    steps:
+      # セットアップ
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Claude CLI
+        run: |
+          pip install anthropic
+          pip install PyGithub
+      
+      # イテレーション1: 初回実装
+      - name: Iteration 1 - Initial Implementation
+        id: iteration1
+        run: |
+          python << 'EOF'
+          import os
+          import anthropic
+          from github import Github
+          
+          # Claude APIでタスク実装
+          client = anthropic.Anthropic(api_key="${{ secrets.CLAUDE_API_KEY }}")
+          
+          message = client.messages.create(
+              model="claude-3-opus-20240229",
+              max_tokens=4000,
+              messages=[{
+                  "role": "user",
+                  "content": f"Task: ${{ github.event.inputs.task }}\nGenerate implementation code."
+              }]
+          )
+          
+          # コードをファイルに保存
+          with open("implementation_v1.py", "w") as f:
+              f.write(message.content[0].text)
+          
+          # PRを作成
+          g = Github("${{ secrets.GITHUB_TOKEN }}")
+          repo = g.get_repo("${{ github.repository }}")
+          
+          # ブランチ作成
+          base = repo.get_branch("main")
+          repo.create_git_ref(f"refs/heads/auto-improve-v1", base.commit.sha)
+          
+          # ファイルをコミット
+          contents = repo.get_contents("implementation.py", ref="auto-improve-v1")
+          repo.update_file(
+              contents.path,
+              "feat: Initial implementation by Claude",
+              message.content[0].text,
+              contents.sha,
+              branch="auto-improve-v1"
+          )
+          
+          # PR作成
+          pr = repo.create_pull(
+              title="Auto Implementation v1",
+              body="Initial implementation by Claude",
+              head="auto-improve-v1",
+              base="main"
+          )
+          
+          print(f"PR_NUMBER={pr.number}")
+          EOF
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+      
+      # Geminiレビューを待つ
+      - name: Wait for Gemini Review
+        run: sleep 60
+      
+      # Geminiのレビューを取得
+      - name: Get Gemini Review
+        id: get_review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.iteration1.outputs.pr_number }}
+            });
+            
+            const geminiComment = comments.data.find(c => 
+              c.body.includes('Gemini AI Code Review')
+            );
+            
+            if (geminiComment) {
+              core.setOutput('review', geminiComment.body);
+              return geminiComment.body;
+            }
+      
+      # イテレーション2: Geminiフィードバックを反映
+      - name: Iteration 2 - Apply Gemini Feedback
+        if: steps.get_review.outputs.review
+        id: iteration2
+        run: |
+          python << 'EOF'
+          import anthropic
+          from github import Github
+          
+          client = anthropic.Anthropic(api_key="${{ secrets.CLAUDE_API_KEY }}")
+          
+          # Geminiのレビューを基に改善
+          review = """${{ steps.get_review.outputs.review }}"""
+          
+          message = client.messages.create(
+              model="claude-3-opus-20240229",
+              max_tokens=4000,
+              messages=[{
+                  "role": "user",
+                  "content": f"Previous code review:\n{review}\n\nImprove the code based on this feedback."
+              }]
+          )
+          
+          # 改善版をコミット
+          g = Github("${{ secrets.GITHUB_TOKEN }}")
+          repo = g.get_repo("${{ github.repository }}")
+          
+          # v2ブランチ作成
+          base = repo.get_branch("auto-improve-v1")
+          repo.create_git_ref(f"refs/heads/auto-improve-v2", base.commit.sha)
+          
+          # ファイル更新
+          contents = repo.get_contents("implementation.py", ref="auto-improve-v2")
+          repo.update_file(
+              contents.path,
+              "improve: Apply Gemini feedback v2",
+              message.content[0].text,
+              contents.sha,
+              branch="auto-improve-v2"
+          )
+          
+          # PR更新
+          pr = repo.get_pull(${{ steps.iteration1.outputs.pr_number }})
+          pr.edit(
+              title="Auto Implementation v2 - Improved",
+              body=f"Improved based on Gemini feedback:\n{review[:500]}..."
+          )
+          EOF
+      
+      # イテレーション3: 最終改善
+      - name: Iteration 3 - Final Polish
+        run: |
+          python << 'EOF'
+          import anthropic
+          
+          client = anthropic.Anthropic(api_key="${{ secrets.CLAUDE_API_KEY }}")
+          
+          # 最終仕上げ
+          message = client.messages.create(
+              model="claude-3-opus-20240229",
+              max_tokens=4000,
+              messages=[{
+                  "role": "user",
+                  "content": "Final polish: Add comprehensive tests, documentation, and error handling."
+              }]
+          )
+          
+          # 最終版をコミット
+          # ... (同様の処理)
+          EOF
+      
+      # 完了通知
+      - name: Create Completion Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '✅ Auto-improvement cycle completed',
+              body: `Task: ${{ github.event.inputs.task }}
+              
+              Completed ${iterations} improvement cycles.
+              PR: #${{ steps.iteration1.outputs.pr_number }}
+              
+              Please review the final implementation.`,
+              labels: ['auto-generated', 'ready-for-review']
+            });

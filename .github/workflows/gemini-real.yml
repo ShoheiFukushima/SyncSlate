@@ -1,0 +1,169 @@
+name: Gemini Real Actions - 実際に動くGemini統合
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Geminiへの指示'
+        required: false
+        default: 'コードをレビューして改善点を教えて'
+
+jobs:
+  # Gemini Code Reviewer (truongnh1992版 - 実績あり)
+  gemini-code-review:
+    name: Gemini AI Code Review
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' || 
+      (github.event.issue.pull_request && contains(github.event.comment.body, '/gemini-review'))
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Run Gemini Code Reviewer
+        uses: truongnh1992/gemini-ai-code-reviewer@main
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          LANGUAGE: 'ja'  # 日本語でレビュー
+  
+  # strawgate版 Gemini (コメントトリガー)
+  gemini-comment-action:
+    name: Gemini via Comments
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'issue_comment' && 
+      contains(github.event.comment.body, '/gemini')
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Gemini Action
+        uses: strawgate/gemini-for-github@0.3
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_issue_number: ${{ github.event.issue.number }}
+          user_question: ${{ github.event.comment.body }}
+          model: 'gemini-1.5-flash'  # 高速モデル
+  
+  # 直接API呼び出し版（カスタム実装）
+  gemini-direct-api:
+    name: Gemini Direct API Call
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Gemini SDK
+        run: |
+          pip install google-generativeai
+      
+      - name: Analyze with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 << 'PYTHON'
+          import os
+          import google.generativeai as genai
+          from pathlib import Path
+          
+          # Gemini設定
+          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+          model = genai.GenerativeModel('gemini-1.5-flash')
+          
+          # 変更ファイルを取得
+          import subprocess
+          result = subprocess.run(
+              ['git', 'diff', '--name-only', 'HEAD~1..HEAD'],
+              capture_output=True, text=True
+          )
+          changed_files = result.stdout.strip().split('\n')
+          
+          print("🤖 Gemini API Analysis")
+          print("=" * 50)
+          
+          for file_path in changed_files:
+              if not file_path or not Path(file_path).exists():
+                  continue
+              
+              # コードファイルのみ対象
+              if not any(file_path.endswith(ext) for ext in ['.ts', '.tsx', '.js', '.jsx', '.py']):
+                  continue
+              
+              print(f"\n📄 Analyzing: {file_path}")
+              
+              with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                  code = f.read()
+              
+              # Geminiにレビューを依頼
+              prompt = f"""
+              以下のコードをレビューしてください。
+              
+              ファイル: {file_path}
+              ```
+              {code[:3000]}  # 最初の3000文字のみ
+              ```
+              
+              以下の観点で日本語で簡潔に答えてください：
+              1. バグの可能性
+              2. セキュリティリスク
+              3. パフォーマンスの改善点
+              4. コードの可読性
+              
+              各項目1-2行で答えてください。
+              """
+              
+              try:
+                  response = model.generate_content(prompt)
+                  print(response.text)
+              except Exception as e:
+                  print(f"❌ エラー: {e}")
+          
+          print("\n" + "=" * 50)
+          print("✅ Gemini分析完了")
+          PYTHON
+      
+      - name: Create Summary
+        if: always()
+        run: |
+          echo "## 🤖 Gemini Analysis Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 実行情報" >> $GITHUB_STEP_SUMMARY
+          echo "- トリガー: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ブランチ: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 実行時刻: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Gemini API" >> $GITHUB_STEP_SUMMARY
+          echo "- モデル: gemini-1.5-flash" >> $GITHUB_STEP_SUMMARY
+          echo "- 言語: 日本語" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "詳細はログを確認してください。" >> $GITHUB_STEP_SUMMARY

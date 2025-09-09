@@ -1,0 +1,250 @@
+name: Claude-Gemini Unlimited Auto Loop
+
+on:
+  # 手動実行
+  workflow_dispatch:
+    inputs:
+      task:
+        description: '実装したいタスク'
+        required: true
+        type: string
+      iterations:
+        description: '改善回数（デフォルト: 3）'
+        default: '3'
+        type: string
+  
+  # Issueからの自動実行
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  auto-code-generation:
+    if: contains(github.event.issue.labels.*.name, 'auto-implement') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    
+    env:
+      CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Dependencies
+        run: |
+          npm install @anthropic-ai/sdk
+          npm install @google/generative-ai
+          npm install @actions/github
+      
+      - name: Auto Implementation Loop
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const Anthropic = require('@anthropic-ai/sdk');
+            const { GoogleGenerativeAI } = require('@google/generative-ai');
+            
+            // Initialize APIs
+            const claude = new Anthropic({
+              apiKey: process.env.CLAUDE_API_KEY,
+            });
+            
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const gemini = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+            
+            // タスクを取得
+            const task = context.payload.inputs?.task || 
+                        context.payload.issue?.body || 
+                        'Implement a simple feature';
+            
+            const iterations = parseInt(context.payload.inputs?.iterations || '3');
+            
+            console.log(`📋 Task: ${task}`);
+            console.log(`🔄 Iterations: ${iterations}`);
+            
+            // ブランチ作成
+            const branchName = `auto-impl-${Date.now()}`;
+            const { data: ref } = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'heads/main'
+            });
+            
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/heads/${branchName}`,
+              sha: ref.object.sha
+            });
+            
+            let code = '';
+            let improvements = [];
+            
+            // 改善ループ
+            for (let i = 1; i <= iterations; i++) {
+              console.log(`\n━━━ Iteration ${i}/${iterations} ━━━`);
+              
+              if (i === 1) {
+                // 初回実装
+                console.log('🤖 Claude: 初回実装中...');
+                const response = await claude.messages.create({
+                  model: 'claude-3-opus-20240229',
+                  max_tokens: 4000,
+                  messages: [{
+                    role: 'user',
+                    content: `Task: ${task}\n\nGenerate complete, production-ready code with tests and documentation.`
+                  }]
+                });
+                
+                code = response.content[0].text;
+                console.log('✅ 初回実装完了');
+                
+              } else {
+                // Geminiレビューを取得
+                console.log('🔍 Gemini: コードレビュー中...');
+                const review = await gemini.generateContent(`
+                  Review this code and provide specific improvements:
+                  
+                  ${code}
+                  
+                  Focus on:
+                  1. Bugs and security issues
+                  2. Performance optimizations
+                  3. Code quality and best practices
+                  4. Missing edge cases
+                `);
+                
+                const reviewText = review.response.text();
+                improvements.push(reviewText);
+                console.log('📝 レビュー完了');
+                
+                // Claudeで改善
+                console.log('🤖 Claude: 改善中...');
+                const improveResponse = await claude.messages.create({
+                  model: 'claude-3-opus-20240229',
+                  max_tokens: 4000,
+                  messages: [{
+                    role: 'user',
+                    content: `Current code:\n${code}\n\nReview feedback:\n${reviewText}\n\nImprove the code based on this feedback.`
+                  }]
+                });
+                
+                code = improveResponse.content[0].text;
+                console.log('✅ 改善完了');
+              }
+              
+              // コードを保存
+              const fileName = `implementation_v${i}.js`;
+              const content = Buffer.from(code).toString('base64');
+              
+              try {
+                // ファイルが存在するか確認
+                const { data: existingFile } = await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path: fileName,
+                  ref: branchName
+                }).catch(() => ({ data: null }));
+                
+                if (existingFile) {
+                  // 更新
+                  await github.rest.repos.updateFile({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    path: fileName,
+                    message: `Iteration ${i}: ${i === 1 ? 'Initial implementation' : 'Apply improvements'}`,
+                    content: content,
+                    sha: existingFile.sha,
+                    branch: branchName
+                  });
+                } else {
+                  // 新規作成
+                  await github.rest.repos.createOrUpdateFileContents({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    path: fileName,
+                    message: `Iteration ${i}: Initial implementation`,
+                    content: content,
+                    branch: branchName
+                  });
+                }
+              } catch (error) {
+                console.error(`Error saving file: ${error.message}`);
+              }
+            }
+            
+            // PR作成
+            console.log('\n🚀 Creating Pull Request...');
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🤖 Auto: ${task.substring(0, 50)}...`,
+              body: `## 🎯 Task
+            ${task}
+            
+            ## 🔄 Improvement Cycles
+            Completed ${iterations} automatic improvement cycles
+            
+            ## 📊 Improvements Made
+            ${improvements.map((imp, i) => `### Cycle ${i + 2}\n${imp.substring(0, 500)}...`).join('\n\n')}
+            
+            ## ✅ Final Implementation
+            The code has been:
+            - Reviewed by Gemini AI ${iterations - 1} times
+            - Improved by Claude AI based on feedback
+            - Optimized for production use
+            
+            ## 🏷️ Labels
+            - \`auto-generated\`
+            - \`ai-improved\`
+            - \`ready-for-review\`
+            
+            ---
+            *Generated by Claude-Gemini Unlimited Loop*`,
+              head: branchName,
+              base: 'main',
+              draft: false
+            });
+            
+            console.log(`✅ PR created: #${pr.number}`);
+            
+            // Issueにコメント
+            if (context.payload.issue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body: `✅ 自動実装が完了しました！\n\nPR: #${pr.number}\n改善サイクル: ${iterations}回`
+              });
+            }
+            
+            // 完了通知
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `✅ Auto Implementation Complete: ${task.substring(0, 50)}`,
+              body: `## Summary
+              - Task: ${task}
+              - PR: #${pr.number}
+              - Iterations: ${iterations}
+              - Status: Ready for human review
+              
+              Please review and merge if satisfactory.`,
+              labels: ['auto-complete', 'needs-review']
+            });
+      
+      - name: Summary
+        run: |
+          echo "## 🎉 Auto Implementation Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Task**: ${{ github.event.inputs.task }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Iterations**: ${{ github.event.inputs.iterations }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: Ready for review" >> $GITHUB_STEP_SUMMARY
