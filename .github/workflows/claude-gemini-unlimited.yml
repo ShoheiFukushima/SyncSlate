@@ -1,8 +1,8 @@
 name: Claude-Gemini Unlimited Auto Loop
 
-on:
+# DISABLED - on:
   # 手動実行
-  workflow_dispatch:
+# DISABLED -   workflow_dispatch:
     inputs:
       task:
         description: '実装したいタスク'
@@ -14,7 +14,7 @@ on:
         type: string
   
   # Issueからの自動実行
-  issues:
+# DISABLED -   issues:
     types: [opened, labeled]
 
 jobs:

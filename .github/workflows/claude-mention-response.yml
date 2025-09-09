@@ -1,9 +1,9 @@
 name: Claude Mention Response
 
-on:
-  issue_comment:
+# DISABLED - on:
+# DISABLED -   issue_comment:
     types: [created]
-  issues:
+# DISABLED -   issues:
     types: [opened]
 
 jobs:

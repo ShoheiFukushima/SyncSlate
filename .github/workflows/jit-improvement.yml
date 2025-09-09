@@ -2,10 +2,10 @@ name: JiT Improvement (Just in Time 改善)
 
 # freeeのJiTテストの考え方を応用した自動改善システム
 
-on:
-  pull_request:
+# DISABLED - on:
+# DISABLED -   pull_request:
     types: [opened, synchronize]
-  push:
+# DISABLED -   push:
     branches: [main]
 
 jobs:

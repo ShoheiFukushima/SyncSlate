@@ -1,7 +1,7 @@
 name: Claude-Gemini Elite Loop (世界最高峰版)
 
-on:
-  workflow_dispatch:
+# DISABLED - on:
+# DISABLED -   workflow_dispatch:
     inputs:
       task:
         description: 'タスク詳細'
@@ -15,10 +15,10 @@ on:
           - 'turbo' # 高速並列処理
         default: 'safe'
   
-  issues:
+# DISABLED -   issues:
     types: [opened, labeled]
   
-  issue_comment:
+# DISABLED -   issue_comment:
     types: [created]
 
 jobs:

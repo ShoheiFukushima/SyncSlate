@@ -1,9 +1,9 @@
 name: Claude Review (Free Tier Optimized)
 
-on:
-  issue_comment:
+# DISABLED - on:
+# DISABLED -   issue_comment:
     types: [created]
-  pull_request_review_comment:
+# DISABLED -   pull_request_review_comment:
     types: [created]
 
 jobs:

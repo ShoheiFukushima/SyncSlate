@@ -1,7 +1,7 @@
 name: LLM Rotation Verification
 
-on:
-  workflow_dispatch:
+# DISABLED - on:
+# DISABLED -   workflow_dispatch:
     inputs:
       pr_number:
         description: 'PR number to verify (pull request number)'

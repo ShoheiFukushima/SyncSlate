@@ -1,10 +1,10 @@
 name: Gemini Daily Health Check
 
-on:
-  schedule:
+# DISABLED - on:
+# DISABLED -   schedule:
     # 毎日朝9時（JST）に実行
     - cron: '0 0 * * *'
-  workflow_dispatch:  # 手動実行も可能
+# DISABLED -   workflow_dispatch:  # 手動実行も可能
 
 jobs:
   daily-check:

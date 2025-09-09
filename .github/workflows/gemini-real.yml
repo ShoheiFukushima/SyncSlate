@@ -1,13 +1,13 @@
 name: Gemini Real Actions - 実際に動くGemini統合
 
-on:
-  pull_request:
+# DISABLED - on:
+# DISABLED -   pull_request:
     types: [opened, synchronize]
-  push:
+# DISABLED -   push:
     branches: [main]
-  issue_comment:
+# DISABLED -   issue_comment:
     types: [created]
-  workflow_dispatch:
+# DISABLED -   workflow_dispatch:
     inputs:
       prompt:
         description: 'Geminiへの指示'

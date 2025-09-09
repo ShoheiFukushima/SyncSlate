@@ -1,10 +1,10 @@
 name: Claude PR Review
-on:
-  pull_request:
+# DISABLED - on:
+# DISABLED -   pull_request:
     types: [opened, synchronize]
-  pull_request_review_comment:
+# DISABLED -   pull_request_review_comment:
     types: [created]
-  issue_comment:
+# DISABLED -   issue_comment:
     types: [created]
 
 jobs:

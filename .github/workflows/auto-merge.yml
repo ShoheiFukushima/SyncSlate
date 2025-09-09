@@ -1,8 +1,8 @@
 name: Auto Merge Open PRs
-on:
-  schedule:
+# DISABLED - on:
+# DISABLED -   schedule:
     - cron: '*/15 * * * *'
-  workflow_dispatch: {}
+# DISABLED -   workflow_dispatch: {}
 permissions:
   pull-requests: write
   checks: read

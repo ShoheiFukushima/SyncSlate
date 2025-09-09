@@ -1,11 +1,11 @@
 name: JiT System Safe - API制限対応版
 
-on:
-  pull_request:
+# DISABLED - on:
+# DISABLED -   pull_request:
     types: [opened, synchronize]
-  push:
+# DISABLED -   push:
     branches: [main, master]
-  workflow_dispatch:
+# DISABLED -   workflow_dispatch:
     inputs:
       force_run:
         description: 'API制限を無視して強制実行'

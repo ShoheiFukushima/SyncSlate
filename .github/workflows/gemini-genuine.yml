@@ -1,11 +1,11 @@
 name: Genuine Gemini API - 本物のGemini統合
 
-on:
-  push:
+# DISABLED - on:
+# DISABLED -   push:
     branches: [main]
-  pull_request:
+# DISABLED -   pull_request:
     types: [opened, synchronize]
-  workflow_dispatch:
+# DISABLED -   workflow_dispatch:
 
 jobs:
   genuine-gemini-analysis:

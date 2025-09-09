@@ -1,7 +1,7 @@
 name: Gemini Test Analysis
 
 # テスト実行ワークフローの後に実行
-on:
+# DISABLED - on:
   workflow_run:
     workflows: ["Run Tests", "CI", "Test"]  # 既存のテストワークフロー名に合わせて調整
     types: [completed]

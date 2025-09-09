@@ -1,7 +1,7 @@
 name: Claude-Gemini Auto Improvement Loop
 
-on:
-  workflow_dispatch:
+# DISABLED - on:
+# DISABLED -   workflow_dispatch:
     inputs:
       task:
         description: 'Task for Claude to implement'
