@@ -199,6 +199,13 @@ const sliderStyles = `
 
 // --- Sync Engine Hook ---
 
+interface SequenceLog {
+  id: string;
+  startTime: number | null;
+  stopTime: number | null;
+  duration: number | null;
+}
+
 const useSyncEngine = () => {
     // Determine Role from URL
     const [role, setRole] = useState<Role>(() => {
@@ -239,6 +246,10 @@ const useSyncEngine = () => {
     const animationFrameRef = useRef<number | null>(null);
     const eventTracker = useRef(new Set<string>());
     
+    // Logging State
+    const [sequenceLogs, setSequenceLogs] = useState<SequenceLog[]>([]);
+    const activeLogRef = useRef<SequenceLog | null>(null);
+
     // Ref to hold the tick function to allow safe recursion without circular dependencies
     const tickRef = useRef<() => void>(() => {});
 
@@ -252,6 +263,22 @@ const useSyncEngine = () => {
     
     const handleStopSequence = useCallback((manual: boolean) => {
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+
+        // Log finalization
+        if (startTime && activeLogRef.current) {
+            const now = Date.now();
+            const diff = (now - startTime) / 1000;
+            const mainTime = diff - actionStartTime;
+
+            const finalLog: SequenceLog = {
+                ...activeLogRef.current,
+                stopTime: now,
+                duration: Math.max(0, mainTime)
+            };
+            setSequenceLogs(prev => [finalLog, ...prev].slice(0, 3));
+            activeLogRef.current = null;
+        }
+
         setStartTime(null);
         
         if (settings.voiceCut) {
@@ -265,7 +292,7 @@ const useSyncEngine = () => {
         setTimeout(() => {
             setMode('SETUP');
         }, 2000);
-    }, [settings.voiceCut, settings.voiceLanguage]);
+    }, [settings.voiceCut, settings.voiceLanguage, startTime, actionStartTime]);
 
     const stop = useCallback(() => {
         if (role === 'CLIENT') return;
@@ -353,14 +380,15 @@ const useSyncEngine = () => {
 
             // Auto Cut
             if (mainTime >= mainDuration) {
-                stop();
+                // Call handleStopSequence directly for both HOST and CLIENT
+                handleStopSequence(false);
                 return;
             }
         }
 
         // Safe recursion via ref
         animationFrameRef.current = requestAnimationFrame(() => tickRef.current());
-    }, [startTime, mode, settings, smartCues, readyDuration, preRollDuration, mainDuration, actionStartTime, stop]);
+    }, [startTime, mode, settings, smartCues, readyDuration, preRollDuration, mainDuration, actionStartTime, handleStopSequence]);
 
     useEffect(() => {
         tickRef.current = tick;
@@ -372,19 +400,24 @@ const useSyncEngine = () => {
         setMode('ARMED');
         setElapsed(0);
         eventTracker.current.clear();
+
+        const newLog = { id: generateId(), startTime: ts, stopTime: null, duration: null };
+        activeLogRef.current = newLog;
         
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = requestAnimationFrame(() => tickRef.current());
     }, []);
 
     const start = useCallback(() => {
-        if (role === 'CLIENT') return; 
+        if (role === 'CLIENT') return;
         const scheduledStart = Date.now() + SYNC_LATENCY_BUFFER_MS;
+        console.log('[HOST] Broadcasting CMD_START with startTime:', new Date(scheduledStart).toISOString());
         handleStartSequence(scheduledStart);
         channelRef.current?.postMessage({
             type: 'CMD_START',
             payload: { startTime: scheduledStart }
         });
+        console.log('[HOST] CMD_START message sent');
     }, [role, handleStartSequence]);
 
     useEffect(() => {
@@ -395,20 +428,25 @@ const useSyncEngine = () => {
 
         const ch = new BroadcastChannel(SYNC_CHANNEL_NAME);
         channelRef.current = ch;
+        console.log(`[${role}] BroadcastChannel initialized: ${SYNC_CHANNEL_NAME}`);
 
         ch.onmessage = (event: MessageEvent<SyncMessage>) => {
             const { type, payload } = event.data;
+            console.log(`[${role}] Received message:`, type, payload);
 
             if (type === 'SYNC_STATE') {
                 // Clients blindly accept state from Host
                 if (role === 'CLIENT') {
+                    console.log('[CLIENT] Applying SYNC_STATE from HOST');
                     setSettings(payload.settings);
                     setSmartCues(payload.smartCues);
                     setColorRanges(payload.colorRanges);
                 }
             } else if (type === 'CMD_START') {
+                console.log(`[${role}] Starting sequence at:`, new Date(payload.startTime).toISOString());
                 handleStartSequence(payload.startTime);
             } else if (type === 'CMD_STOP') {
+                console.log(`[${role}] Stopping sequence (manual: ${payload.manual})`);
                 handleStopSequence(payload.manual);
             }
         };
@@ -467,7 +505,8 @@ const useSyncEngine = () => {
         stop,
         readyDuration,
         actionStartTime,
-        mainDuration
+        mainDuration,
+        sequenceLogs
     };
 };
 
@@ -874,6 +913,35 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
                    {getShareUrl()}
                 </div>
              </div>
+          </section>
+
+          {/* Section: Recent Activity */}
+          <section className="space-y-4">
+             <div className="flex justify-between items-center pl-1">
+                 <div className={clsx("text-[10px] font-mono uppercase tracking-widest", subTextClass)}>// Recent Activity</div>
+             </div>
+
+             <div className={clsx("border rounded-lg p-2 space-y-1", cardClass)}>
+                {engine.sequenceLogs.length === 0 ? (
+                    <div className={clsx("text-center text-xs py-5", subTextClass)}>
+                        No sequences recorded yet.
+                    </div>
+                ) : (
+                    engine.sequenceLogs.map(log => (
+                        <div key={log.id} className={clsx("p-2 rounded-md flex justify-between items-center", isDark ? "hover:bg-neutral-800/50" : "hover:bg-neutral-50")}>
+                            <div className="flex items-center gap-3">
+                                <CheckCircle className={clsx("w-4 h-4", isDark ? "text-emerald-700" : "text-emerald-500")} />
+                                <span className={clsx("font-bold font-mono text-sm", textClass)}>
+                                    {log.duration !== null ? `${log.duration.toFixed(2)}s` : 'In Progress...'}
+                                </span>
+                            </div>
+                            <span className={clsx("text-xs font-mono", subTextClass)}>
+                                {log.startTime ? new Date(log.startTime).toLocaleTimeString() : ''}
+                            </span>
+                        </div>
+                    ))
+                )}
+            </div>
           </section>
 
           {/* Section: Timeline */}
