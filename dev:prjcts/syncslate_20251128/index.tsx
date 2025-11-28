@@ -425,6 +425,33 @@ const useSyncEngine = () => {
         }
     }, [role, settings, smartCues, colorRanges]);
 
+    // Keyboard shortcut: Space key to start/stop
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            // Ignore if user is typing in an input field
+            const target = event.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                return;
+            }
+
+            // Space key
+            if (event.code === 'Space' || event.key === ' ') {
+                event.preventDefault(); // Prevent page scroll
+
+                if (mode === 'SETUP') {
+                    // Start the sequence
+                    start();
+                } else if (mode === 'COUNTDOWN' || mode === 'ARMED') {
+                    // Stop the sequence
+                    stop();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [mode, start, stop]);
+
     return {
         role,
         setRole,
