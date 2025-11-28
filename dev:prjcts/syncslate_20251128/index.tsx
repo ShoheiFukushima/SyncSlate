@@ -29,6 +29,17 @@ import {
 import clsx from 'clsx';
 import { getGeminiAudioEngine, triggerVoice } from './gemini-api';
 
+// 新しいサービスのインポート
+import { timeSync } from './services/time-sync';
+import { precisionTimer } from './services/precision-timer';
+import { audioSync } from './services/audio-sync';
+import {
+  SupabaseSyncEngine,
+  generateDeviceId,
+  getSessionIdFromUrl
+} from './services/supabase-sync-engine';
+import type { SyncMode } from './types/sync';
+
 // --- Architecture Constants ---
 
 const SYNC_CHANNEL_NAME = 'sync-slate-v1';
@@ -213,6 +224,13 @@ const useSyncEngine = () => {
         return params.get('role') === 'client' ? 'CLIENT' : 'HOST';
     });
 
+    // Sync Mode Selection
+    const [syncMode, setSyncMode] = useState<SyncMode>(() => {
+        // Supabaseが設定されている場合はsupabaseモード、それ以外はbroadcast
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        return supabaseUrl ? 'supabase' : 'broadcast';
+    });
+
     // Core State
     const [mode, setMode] = useState<Mode>('SETUP');
     const [settings, setSettings] = useState<Settings>({
@@ -243,6 +261,7 @@ const useSyncEngine = () => {
     const [elapsed, setElapsed] = useState(0);
     const [startTime, setStartTime] = useState<number | null>(null); // Absolute Timestamp
     const channelRef = useRef<BroadcastChannel | null>(null);
+    const supabaseSyncEngineRef = useRef<SupabaseSyncEngine | null>(null);
     const animationFrameRef = useRef<number | null>(null);
     const eventTracker = useRef(new Set<string>());
     
@@ -294,16 +313,24 @@ const useSyncEngine = () => {
         }, 2000);
     }, [settings.voiceCut, settings.voiceLanguage, startTime, actionStartTime]);
 
-    const stop = useCallback(() => {
+    const stop = useCallback(async () => {
         if (role === 'CLIENT') return;
         // Local Stop
         handleStopSequence(true);
+
         // Broadcast Stop
-        channelRef.current?.postMessage({
-            type: 'CMD_STOP',
-            payload: { manual: true }
-        });
-    }, [role, handleStopSequence]);
+        if (syncMode === 'supabase' && supabaseSyncEngineRef.current) {
+            await supabaseSyncEngineRef.current.sendMessage({
+                type: 'CMD_STOP',
+                payload: { manual: true }
+            });
+        } else if (channelRef.current) {
+            channelRef.current.postMessage({
+                type: 'CMD_STOP',
+                payload: { manual: true }
+            });
+        }
+    }, [role, syncMode, handleStopSequence]);
 
     /**
      * Core Loop Logic (Time-Reference Model)
@@ -408,60 +435,136 @@ const useSyncEngine = () => {
         animationFrameRef.current = requestAnimationFrame(() => tickRef.current());
     }, []);
 
-    const start = useCallback(() => {
+    const start = useCallback(async () => {
         if (role === 'CLIENT') return;
         const scheduledStart = Date.now() + SYNC_LATENCY_BUFFER_MS;
         console.log('[HOST] Broadcasting CMD_START with startTime:', new Date(scheduledStart).toISOString());
         handleStartSequence(scheduledStart);
-        channelRef.current?.postMessage({
-            type: 'CMD_START',
-            payload: { startTime: scheduledStart }
-        });
-        console.log('[HOST] CMD_START message sent');
-    }, [role, handleStartSequence]);
 
-    useEffect(() => {
-        if (typeof BroadcastChannel === 'undefined') {
-            console.warn("BroadcastChannel not supported in this browser. Sync features disabled.");
-            return;
+        // Send message via appropriate channel
+        if (syncMode === 'supabase' && supabaseSyncEngineRef.current) {
+            await supabaseSyncEngineRef.current.sendMessage({
+                type: 'CMD_START',
+                payload: { startTime: scheduledStart }
+            });
+        } else if (channelRef.current) {
+            channelRef.current.postMessage({
+                type: 'CMD_START',
+                payload: { startTime: scheduledStart }
+            });
         }
+        console.log('[HOST] CMD_START message sent');
+    }, [role, syncMode, handleStartSequence]);
 
-        const ch = new BroadcastChannel(SYNC_CHANNEL_NAME);
-        channelRef.current = ch;
-        console.log(`[${role}] BroadcastChannel initialized: ${SYNC_CHANNEL_NAME}`);
+    // Sync Engine Initialization (BroadcastChannel or Supabase)
+    useEffect(() => {
+        const initSyncEngine = async () => {
+            if (syncMode === 'supabase') {
+                // Supabase Sync Mode
+                try {
+                    const deviceId = generateDeviceId();
+                    const sessionIdFromUrl = getSessionIdFromUrl();
 
-        ch.onmessage = (event: MessageEvent<SyncMessage>) => {
-            const { type, payload } = event.data;
-            console.log(`[${role}] Received message:`, type, payload);
+                    const engine = new SupabaseSyncEngine({
+                        role,
+                        deviceId,
+                        onMessage: (message) => {
+                            console.log(`[${role}] Supabase message:`, message.type);
 
-            if (type === 'SYNC_STATE') {
-                // Clients blindly accept state from Host
-                if (role === 'CLIENT') {
-                    console.log('[CLIENT] Applying SYNC_STATE from HOST');
-                    setSettings(payload.settings);
-                    setSmartCues(payload.smartCues);
-                    setColorRanges(payload.colorRanges);
+                            if (message.type === 'SYNC_STATE') {
+                                if (role === 'CLIENT') {
+                                    console.log('[CLIENT] Applying SYNC_STATE from HOST');
+                                    setSettings(message.payload.settings);
+                                    setSmartCues(message.payload.smartCues);
+                                    setColorRanges(message.payload.colorRanges);
+                                }
+                            } else if (message.type === 'CMD_START') {
+                                console.log(`[${role}] Starting sequence at:`, new Date(message.payload.startTime).toISOString());
+                                handleStartSequence(message.payload.startTime);
+                            } else if (message.type === 'CMD_STOP') {
+                                console.log(`[${role}] Stopping sequence`);
+                                handleStopSequence(message.payload.manual);
+                            }
+                        },
+                        onError: (error) => {
+                            console.error('[Supabase Sync] Error:', error);
+                        },
+                    });
+
+                    // Join or create session
+                    if (role === 'HOST') {
+                        await engine.createSession(settings, smartCues, colorRanges);
+                        console.log('[HOST] Supabase session created');
+                    } else if (sessionIdFromUrl) {
+                        await engine.joinSession(sessionIdFromUrl);
+                        console.log('[CLIENT] Joined Supabase session:', sessionIdFromUrl);
+                    }
+
+                    supabaseSyncEngineRef.current = engine;
+
+                    return () => {
+                        engine.leaveSession();
+                    };
+                } catch (error) {
+                    console.error('[Supabase Sync] Initialization failed:', error);
+                    // Fallback to BroadcastChannel
+                    setSyncMode('broadcast');
                 }
-            } else if (type === 'CMD_START') {
-                console.log(`[${role}] Starting sequence at:`, new Date(payload.startTime).toISOString());
-                handleStartSequence(payload.startTime);
-            } else if (type === 'CMD_STOP') {
-                console.log(`[${role}] Stopping sequence (manual: ${payload.manual})`);
-                handleStopSequence(payload.manual);
+            } else {
+                // BroadcastChannel Mode
+                if (typeof BroadcastChannel === 'undefined') {
+                    console.warn("BroadcastChannel not supported in this browser. Sync features disabled.");
+                    return;
+                }
+
+                const ch = new BroadcastChannel(SYNC_CHANNEL_NAME);
+                channelRef.current = ch;
+                console.log(`[${role}] BroadcastChannel initialized: ${SYNC_CHANNEL_NAME}`);
+
+                ch.onmessage = (event: MessageEvent<SyncMessage>) => {
+                    const { type, payload } = event.data;
+                    console.log(`[${role}] Received message:`, type, payload);
+
+                    if (type === 'SYNC_STATE') {
+                        if (role === 'CLIENT') {
+                            console.log('[CLIENT] Applying SYNC_STATE from HOST');
+                            setSettings(payload.settings);
+                            setSmartCues(payload.smartCues);
+                            setColorRanges(payload.colorRanges);
+                        }
+                    } else if (type === 'CMD_START') {
+                        console.log(`[${role}] Starting sequence at:`, new Date(payload.startTime).toISOString());
+                        handleStartSequence(payload.startTime);
+                    } else if (type === 'CMD_STOP') {
+                        console.log(`[${role}] Stopping sequence (manual: ${payload.manual})`);
+                        handleStopSequence(payload.manual);
+                    }
+                };
+
+                return () => ch.close();
             }
         };
 
-        return () => ch.close();
-    }, [role, handleStartSequence, handleStopSequence]);
+        initSyncEngine();
+    }, [role, syncMode, settings, smartCues, colorRanges, handleStartSequence, handleStopSequence]);
 
+    // Settings sync (HOST only)
     useEffect(() => {
-        if (role === 'HOST' && channelRef.current) {
-            channelRef.current.postMessage({
-                type: 'SYNC_STATE',
-                payload: { settings, smartCues, colorRanges }
-            });
-        }
-    }, [role, settings, smartCues, colorRanges]);
+        const syncSettings = async () => {
+            if (role !== 'HOST') return;
+
+            if (syncMode === 'supabase' && supabaseSyncEngineRef.current) {
+                await supabaseSyncEngineRef.current.updateSession(settings, smartCues, colorRanges);
+            } else if (channelRef.current) {
+                channelRef.current.postMessage({
+                    type: 'SYNC_STATE',
+                    payload: { settings, smartCues, colorRanges }
+                });
+            }
+        };
+
+        syncSettings();
+    }, [role, syncMode, settings, smartCues, colorRanges]);
 
     // Keyboard shortcut: Space key to start/stop
     useEffect(() => {
@@ -506,7 +609,9 @@ const useSyncEngine = () => {
         readyDuration,
         actionStartTime,
         mainDuration,
-        sequenceLogs
+        sequenceLogs,
+        syncMode,
+        setSyncMode
     };
 };
 
@@ -810,6 +915,57 @@ const SettingsModal = ({ engine, theme, onClose }: { engine: ReturnType<typeof u
                         </div>
                          <div className={clsx("text-[10px] opacity-40 px-1 text-center", textClass)}>
                             * Audio generation is currently simulated for development. Check console for asset paths.
+                        </div>
+                    </div>
+
+                    {/* Section: Sync Mode */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                             <Radio className={clsx("w-4 h-4", isDark ? "text-neutral-400" : "text-neutral-500")} />
+                             <h4 className={clsx("text-xs font-bold uppercase tracking-widest opacity-60", textClass)}>Synchronization Mode</h4>
+                        </div>
+
+                        <div className={clsx("border rounded-lg overflow-hidden", isDark ? "border-neutral-800" : "border-neutral-200")}>
+                            <button
+                                onClick={() => engine.setSyncMode('broadcast')}
+                                className={clsx(
+                                    "w-full px-4 py-3 flex items-center justify-between text-left transition-colors border-b",
+                                    isDark ? "border-neutral-800" : "border-neutral-100",
+                                    engine.syncMode === 'broadcast'
+                                        ? (isDark ? "bg-neutral-800 text-white" : "bg-neutral-50 text-black")
+                                        : (isDark ? "text-neutral-400 hover:bg-neutral-800/50" : "text-neutral-600 hover:bg-neutral-50")
+                                )}
+                            >
+                                <div>
+                                    <div className="text-sm font-bold">BroadcastChannel</div>
+                                    <div className="text-[10px] opacity-60 mt-0.5">Same browser tabs only</div>
+                                </div>
+                                {engine.syncMode === 'broadcast' && (
+                                    <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => engine.setSyncMode('supabase')}
+                                className={clsx(
+                                    "w-full px-4 py-3 flex items-center justify-between text-left transition-colors",
+                                    engine.syncMode === 'supabase'
+                                        ? (isDark ? "bg-neutral-800 text-white" : "bg-neutral-50 text-black")
+                                        : (isDark ? "text-neutral-400 hover:bg-neutral-800/50" : "text-neutral-600 hover:bg-neutral-50")
+                                )}
+                            >
+                                <div>
+                                    <div className="text-sm font-bold">Supabase Realtime</div>
+                                    <div className="text-[10px] opacity-60 mt-0.5">Cross-device synchronization</div>
+                                </div>
+                                {engine.syncMode === 'supabase' && (
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                                )}
+                            </button>
+                        </div>
+                         <div className={clsx("text-[10px] opacity-40 px-1 text-center", textClass)}>
+                            {engine.syncMode === 'supabase'
+                                ? '* Requires Supabase configuration in .env'
+                                : '* Limited to same browser instance'}
                         </div>
                     </div>
 
