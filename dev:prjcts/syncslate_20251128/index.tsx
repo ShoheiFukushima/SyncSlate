@@ -493,8 +493,9 @@ const useSyncEngine = () => {
 
                     // Join or create session
                     if (role === 'HOST') {
-                        await engine.createSession(settings, smartCues, colorRanges);
-                        console.log('[HOST] Supabase session created');
+                        const sessionInfo = await engine.createSession(settings, smartCues, colorRanges);
+                        setSupabaseSessionId(sessionInfo.id);
+                        console.log('[HOST] Supabase session created:', sessionInfo.id);
                     } else if (sessionIdFromUrl) {
                         await engine.joinSession(sessionIdFromUrl);
                         console.log('[CLIENT] Joined Supabase session:', sessionIdFromUrl);
@@ -994,11 +995,12 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
     : "bg-neutral-50 text-neutral-900 border-neutral-300 focus:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed";
 
     const [urlCopied, setUrlCopied] = useState(false);
-    const sessionId = useRef(generateId());
+    const [supabaseSessionId, setSupabaseSessionId] = useState<string | null>(null);
 
     const getShareUrl = () => {
         const baseUrl = window.location.origin + window.location.pathname;
-        return `${baseUrl}?role=client&session=${sessionId.current}`;
+        const sessionId = supabaseSessionId || generateId();
+        return `${baseUrl}?role=client&session=${sessionId}`;
     };
 
     const copyShareUrl = async () => {
