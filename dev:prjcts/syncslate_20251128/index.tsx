@@ -395,6 +395,7 @@ const useSyncEngine = () => {
             if (currentSec > 0 && currentSec <= mainDuration && currentSec <= 100) {
                 const key = `count-${currentSec}`;
                 if (!eventTracker.current.has(key)) {
+                    console.log(`[${role}] Triggering voice for number: ${currentSec}, language: ${settings.voiceLanguage}`);
                     AudioEngine.trigger(currentSec.toString(), settings.voiceLanguage);
                     eventTracker.current.add(key);
                 }
@@ -482,7 +483,9 @@ const useSyncEngine = () => {
 
                             if (message.type === 'SYNC_STATE') {
                                 if (role === 'CLIENT') {
-                                    console.log('[CLIENT] Applying SYNC_STATE from HOST');
+                                    console.log('[CLIENT] Applying SYNC_STATE from HOST (Supabase)');
+                                    console.log('[CLIENT] Voice Language:', message.payload.settings.voiceLanguage);
+                                    console.log('[CLIENT] Full settings:', message.payload.settings);
                                     setSettings(message.payload.settings);
                                     setSmartCues(message.payload.smartCues);
                                     setColorRanges(message.payload.colorRanges);
@@ -537,7 +540,9 @@ const useSyncEngine = () => {
 
                     if (type === 'SYNC_STATE') {
                         if (role === 'CLIENT') {
-                            console.log('[CLIENT] Applying SYNC_STATE from HOST');
+                            console.log('[CLIENT] Applying SYNC_STATE from HOST (BroadcastChannel)');
+                            console.log('[CLIENT] Voice Language:', payload.settings.voiceLanguage);
+                            console.log('[CLIENT] Full settings:', payload.settings);
                             setSettings(payload.settings);
                             setSmartCues(payload.smartCues);
                             setColorRanges(payload.colorRanges);
@@ -562,6 +567,8 @@ const useSyncEngine = () => {
     useEffect(() => {
         const syncSettings = async () => {
             if (role !== 'HOST') return;
+
+            console.log('[HOST] Syncing settings to clients, voiceLanguage:', settings.voiceLanguage);
 
             if (syncMode === 'supabase' && supabaseSyncEngineRef.current) {
                 await supabaseSyncEngineRef.current.updateSession(settings, smartCues, colorRanges);
