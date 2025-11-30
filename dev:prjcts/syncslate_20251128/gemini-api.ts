@@ -61,7 +61,6 @@ class GeminiAudioEngine {
   private initSpeech() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       this.speechSynth = window.speechSynthesis;
-      console.log('[GeminiAudio] Web Speech API initialized');
     } else {
       console.warn('[GeminiAudio] Web Speech API not supported');
     }
@@ -137,11 +136,7 @@ class GeminiAudioEngine {
 
     // Resume AudioContext if suspended (required for Safari/iOS)
     if (ctx.state === 'suspended') {
-      console.log('[GeminiAudio] AudioContext is suspended, resuming...');
       await ctx.resume();
-      console.log(`[GeminiAudio] AudioContext resumed, new state: ${ctx.state}`);
-    } else {
-      console.log(`[GeminiAudio] AudioContext state is already: ${ctx.state}`);
     }
 
     const audioKey = `jp-num-${num}`;
@@ -150,13 +145,11 @@ class GeminiAudioEngine {
 
     // Check if buffer is already cached
     if (this.audioBufferCache.has(audioKey)) {
-      console.log(`[GeminiAudio] Playing cached AudioBuffer for: ${num}`);
       const buffer = this.audioBufferCache.get(audioKey)!;
       return this.playAudioBuffer(buffer, ctx);
     }
 
     // Load and decode audio file
-    console.log(`[GeminiAudio] Loading Japanese voice file: ${audioPath}`);
     try {
       const response = await fetch(audioPath);
       if (!response.ok) {
@@ -166,7 +159,6 @@ class GeminiAudioEngine {
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-      console.log(`[GeminiAudio] Audio decoded successfully: ${audioPath}`);
       // Cache the decoded buffer
       this.audioBufferCache.set(audioKey, audioBuffer);
 
@@ -181,10 +173,6 @@ class GeminiAudioEngine {
    * Play an AudioBuffer using Web Audio API
    */
   private playAudioBuffer(buffer: AudioBuffer, ctx: AudioContext): Promise<void> {
-    console.log(`[GeminiAudio] AudioContext state: ${ctx.state}`);
-    console.log(`[GeminiAudio] AudioContext sampleRate: ${ctx.sampleRate}`);
-    console.log(`[GeminiAudio] AudioBuffer duration: ${buffer.duration}s`);
-
     return new Promise((resolve) => {
       const source = ctx.createBufferSource();
       source.buffer = buffer;
@@ -197,13 +185,11 @@ class GeminiAudioEngine {
       gainNode.connect(ctx.destination);
 
       source.onended = () => {
-        console.log('[GeminiAudio] AudioBuffer playback completed');
         resolve();
       };
 
       try {
         source.start(0);
-        console.log('[GeminiAudio] AudioBuffer playback started successfully');
       } catch (error) {
         console.error('[GeminiAudio] Failed to start AudioBuffer playback:', error);
         resolve(); // Resolve anyway to avoid hanging
@@ -224,7 +210,6 @@ class GeminiAudioEngine {
     if (config.language === 'jp') {
       const num = parseInt(text.trim(), 10);
       if (!isNaN(num) && num >= 0 && num <= 60) {
-        console.log(`[GeminiAudio] Playing Japanese voice file for number: ${num}`);
         try {
           await this.playJapaneseNumberVoice(num);
           return;
@@ -242,7 +227,6 @@ class GeminiAudioEngine {
 
     // Translate standard phrases
     const translatedText = this.translatePhrase(text, config.language);
-    console.log(`[GeminiAudio] Speaking: "${translatedText}" (${config.language})`);
 
     return new Promise((resolve, reject) => {
       // Wait for any ongoing speech to complete before starting new one
