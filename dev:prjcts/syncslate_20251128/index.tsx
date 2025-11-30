@@ -547,7 +547,7 @@ const useSyncEngine = () => {
         };
 
         initSyncEngine();
-    }, [role, syncMode, settings, smartCues, colorRanges, handleStartSequence, handleStopSequence]);
+    }, [role, syncMode]); // 無限ループ防止: settings等は初期化時のみ使用
 
     // Settings sync (HOST only)
     useEffect(() => {
