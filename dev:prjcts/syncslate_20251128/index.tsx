@@ -433,9 +433,15 @@ const useSyncEngine = () => {
 
         const newLog = { id: generateId(), startTime: ts, stopTime: null, duration: null };
         activeLogRef.current = newLog;
-        
+
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = requestAnimationFrame(() => tickRef.current());
+        // Double requestAnimationFrame ensures React state updates complete before starting tick loop
+        // This fixes Chrome browser compatibility where tickRef.current may not be updated yet
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                animationFrameRef.current = requestAnimationFrame(() => tickRef.current());
+            });
+        });
     }, []);
 
     const start = useCallback(async () => {
