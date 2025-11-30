@@ -269,6 +269,9 @@ const useSyncEngine = () => {
     const [sequenceLogs, setSequenceLogs] = useState<SequenceLog[]>([]);
     const activeLogRef = useRef<SequenceLog | null>(null);
 
+    // Supabase Session State
+    const [supabaseSessionId, setSupabaseSessionId] = useState<string | null>(null);
+
     // Ref to hold the tick function to allow safe recursion without circular dependencies
     const tickRef = useRef<() => void>(() => {});
 
@@ -612,7 +615,8 @@ const useSyncEngine = () => {
         mainDuration,
         sequenceLogs,
         syncMode,
-        setSyncMode
+        setSyncMode,
+        supabaseSessionId
     };
 };
 
@@ -995,11 +999,10 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
     : "bg-neutral-50 text-neutral-900 border-neutral-300 focus:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed";
 
     const [urlCopied, setUrlCopied] = useState(false);
-    const [supabaseSessionId, setSupabaseSessionId] = useState<string | null>(null);
 
     const getShareUrl = () => {
         const baseUrl = window.location.origin + window.location.pathname;
-        const sessionId = supabaseSessionId || generateId();
+        const sessionId = engine.supabaseSessionId || generateId();
         return `${baseUrl}?role=client&session=${sessionId}`;
     };
 
