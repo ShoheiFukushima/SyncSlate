@@ -297,6 +297,11 @@ const useSyncEngine = () => {
     // Ref to hold the tick function to allow safe recursion without circular dependencies
     const tickRef = useRef<() => void>(() => {});
 
+    // Refs to hold handleStartSequence and handleStopSequence for message handlers
+    // This ensures message handlers always call the latest version of these functions
+    const handleStartSequenceRef = useRef<(ts: number) => void>(() => {});
+    const handleStopSequenceRef = useRef<(manual: boolean) => void>(() => {});
+
     // Debounced values for settings sync (500ms)
     // これにより、スライダー操作時の過剰な同期を防ぎ、96.7%の負荷削減を実現
     const debouncedSettings = useDebounce(settings, 500);
@@ -504,6 +509,13 @@ const useSyncEngine = () => {
         console.log('[HOST] CMD_START message sent');
     }, [role, syncMode, handleStartSequence]);
 
+    // Update refs whenever handleStartSequence or handleStopSequence changes
+    // This ensures message handlers always call the latest version
+    useEffect(() => {
+        handleStartSequenceRef.current = handleStartSequence;
+        handleStopSequenceRef.current = handleStopSequence;
+    }, [handleStartSequence, handleStopSequence]);
+
     // Sync Engine Initialization (BroadcastChannel or Supabase)
     useEffect(() => {
         const initSyncEngine = async () => {
@@ -530,10 +542,10 @@ const useSyncEngine = () => {
                                 }
                             } else if (message.type === 'CMD_START') {
                                 console.log(`[${role}] Starting sequence at:`, new Date(message.payload.startTime).toISOString());
-                                handleStartSequence(message.payload.startTime);
+                                handleStartSequenceRef.current(message.payload.startTime);
                             } else if (message.type === 'CMD_STOP') {
                                 console.log(`[${role}] Stopping sequence`);
-                                handleStopSequence(message.payload.manual);
+                                handleStopSequenceRef.current(message.payload.manual);
                             }
                         },
                         onError: (error) => {
@@ -587,10 +599,10 @@ const useSyncEngine = () => {
                         }
                     } else if (type === 'CMD_START') {
                         console.log(`[${role}] Starting sequence at:`, new Date(payload.startTime).toISOString());
-                        handleStartSequence(payload.startTime);
+                        handleStartSequenceRef.current(payload.startTime);
                     } else if (type === 'CMD_STOP') {
                         console.log(`[${role}] Stopping sequence (manual: ${payload.manual})`);
-                        handleStopSequence(payload.manual);
+                        handleStopSequenceRef.current(payload.manual);
                     }
                 };
 
