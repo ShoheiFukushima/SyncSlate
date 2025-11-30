@@ -217,32 +217,46 @@ class GeminiAudioEngine {
     console.log(`[GeminiAudio] Speaking: "${translatedText}" (${config.language})`);
 
     return new Promise((resolve, reject) => {
-      // Cancel any ongoing speech
-      this.speechSynth!.cancel();
+      // Wait for any ongoing speech to complete before starting new one
+      // This prevents "interrupted" errors
+      const waitForSpeechEnd = () => {
+        if (this.speechSynth!.speaking) {
+          setTimeout(waitForSpeechEnd, 50);
+          return;
+        }
 
-      const utterance = new SpeechSynthesisUtterance(translatedText);
+        const utterance = new SpeechSynthesisUtterance(translatedText);
 
-      // Find appropriate voice
-      const voice = this.findVoice(config.language);
-      if (voice) {
-        utterance.voice = voice;
-        utterance.lang = voice.lang;
-      } else {
-        utterance.lang = VOICE_CONFIGS[config.language].locale;
-      }
+        // Find appropriate voice
+        const voice = this.findVoice(config.language);
+        if (voice) {
+          utterance.voice = voice;
+          utterance.lang = voice.lang;
+        } else {
+          utterance.lang = VOICE_CONFIGS[config.language].locale;
+        }
 
-      // Apply voice parameters
-      utterance.rate = config.rate || 1.0;
-      utterance.pitch = config.pitch || 1.0;
-      utterance.volume = config.volume || 1.0;
+        // Apply voice parameters
+        utterance.rate = config.rate || 1.0;
+        utterance.pitch = config.pitch || 1.0;
+        utterance.volume = config.volume || 1.0;
 
-      utterance.onend = () => resolve();
-      utterance.onerror = (event) => {
-        console.error('[GeminiAudio] Speech error:', event);
-        reject(event.error);
+        utterance.onend = () => resolve();
+        utterance.onerror = (event) => {
+          console.error('[GeminiAudio] Speech error:', event);
+          // Don't reject on "interrupted" or "canceled" errors
+          if (event.error === 'interrupted' || event.error === 'canceled') {
+            console.warn('[GeminiAudio] Speech was interrupted/canceled, resolving anyway');
+            resolve();
+          } else {
+            reject(event.error);
+          }
+        };
+
+        this.speechSynth!.speak(utterance);
       };
 
-      this.speechSynth!.speak(utterance);
+      waitForSpeechEnd();
     });
   }
 

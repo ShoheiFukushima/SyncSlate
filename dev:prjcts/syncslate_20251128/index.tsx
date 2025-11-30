@@ -746,9 +746,27 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
     const isDark = theme === 'dark';
     const [audioEnabled, setAudioEnabled] = useState(false);
 
-    const enableAudio = () => {
+    const enableAudio = async () => {
         console.log('[CLIENT] Enabling audio...');
         AudioEngine.resume();
+
+        // Play a test sound to unlock audio playback on iOS/Safari
+        // This is required because Safari blocks audio playback without user interaction
+        try {
+            if (engine.settings.voiceLanguage === 'jp') {
+                // For Japanese, play voice file for "0" as test
+                console.log('[CLIENT] Playing test Japanese voice to unlock audio...');
+                await AudioEngine.trigger('0', 'jp');
+            } else {
+                // For other languages, play a short tone
+                console.log('[CLIENT] Playing test tone to unlock audio...');
+                AudioEngine.playTone(800, 0.1, 'sine');
+            }
+            console.log('[CLIENT] Audio unlocked successfully');
+        } catch (error) {
+            console.warn('[CLIENT] Failed to unlock audio:', error);
+        }
+
         setAudioEnabled(true);
     };
 
@@ -756,10 +774,9 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
     useEffect(() => {
         if (audioEnabled) return;
 
-        const handleInteraction = () => {
+        const handleInteraction = async () => {
             console.log('[CLIENT] Auto-enabling audio on user interaction');
-            AudioEngine.resume();
-            setAudioEnabled(true);
+            await enableAudio();
         };
 
         window.addEventListener('click', handleInteraction, { once: true });
@@ -769,7 +786,7 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
             window.removeEventListener('click', handleInteraction);
             window.removeEventListener('touchstart', handleInteraction);
         };
-    }, [audioEnabled]);
+    }, [audioEnabled, engine.settings.voiceLanguage]);
 
     return (
         <div className="flex flex-col h-full items-center justify-center relative p-6 text-center">
