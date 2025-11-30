@@ -124,6 +124,7 @@ class GeminiAudioEngine {
    */
   private async playJapaneseNumberVoice(num: number): Promise<void> {
     if (num < 0 || num > 60) {
+      console.error(`[GeminiAudio] Number out of range: ${num} (must be 0-60)`);
       throw new Error(`Number out of range: ${num} (must be 0-60)`);
     }
 
@@ -131,32 +132,53 @@ class GeminiAudioEngine {
 
     // Check cache first
     if (this.audioCache.has(audioKey)) {
+      console.log(`[GeminiAudio] Playing cached Japanese voice for: ${num}`);
       const audio = this.audioCache.get(audioKey)!;
       audio.currentTime = 0; // Reset to start
       return new Promise((resolve, reject) => {
         audio.onended = () => resolve();
-        audio.onerror = () => reject(new Error('Audio playback failed'));
-        audio.play().catch(reject);
+        audio.onerror = () => {
+          console.error(`[GeminiAudio] Audio playback failed for cached: ${num}`);
+          reject(new Error('Audio playback failed'));
+        };
+        audio.play().catch((err) => {
+          console.error(`[GeminiAudio] Play() failed for cached: ${num}`, err);
+          reject(err);
+        });
       });
     }
 
     // Load and cache the audio file
     const paddedNum = num.toString().padStart(3, '0');
     const audioPath = `/voices/num${paddedNum}_02_01.wav`;
+    console.log(`[GeminiAudio] Loading Japanese voice file: ${audioPath}`);
 
     return new Promise((resolve, reject) => {
       const audio = new Audio(audioPath);
 
       audio.oncanplaythrough = () => {
+        console.log(`[GeminiAudio] Audio loaded successfully: ${audioPath}`);
         // Cache the audio element for future use
         this.audioCache.set(audioKey, audio);
 
-        audio.onended = () => resolve();
-        audio.onerror = () => reject(new Error('Audio playback failed'));
-        audio.play().catch(reject);
+        audio.onended = () => {
+          console.log(`[GeminiAudio] Audio playback completed: ${audioPath}`);
+          resolve();
+        };
+        audio.onerror = () => {
+          console.error(`[GeminiAudio] Audio playback failed: ${audioPath}`);
+          reject(new Error('Audio playback failed'));
+        };
+        audio.play().catch((err) => {
+          console.error(`[GeminiAudio] Play() failed: ${audioPath}`, err);
+          reject(err);
+        });
       };
 
-      audio.onerror = () => reject(new Error(`Failed to load audio: ${audioPath}`));
+      audio.onerror = (err) => {
+        console.error(`[GeminiAudio] Failed to load audio: ${audioPath}`, err);
+        reject(new Error(`Failed to load audio: ${audioPath}`));
+      };
       audio.load();
     });
   }

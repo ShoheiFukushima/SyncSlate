@@ -747,9 +747,29 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
     const [audioEnabled, setAudioEnabled] = useState(false);
 
     const enableAudio = () => {
+        console.log('[CLIENT] Enabling audio...');
         AudioEngine.resume();
         setAudioEnabled(true);
     };
+
+    // Auto-enable audio on any user interaction
+    useEffect(() => {
+        if (audioEnabled) return;
+
+        const handleInteraction = () => {
+            console.log('[CLIENT] Auto-enabling audio on user interaction');
+            AudioEngine.resume();
+            setAudioEnabled(true);
+        };
+
+        window.addEventListener('click', handleInteraction, { once: true });
+        window.addEventListener('touchstart', handleInteraction, { once: true });
+
+        return () => {
+            window.removeEventListener('click', handleInteraction);
+            window.removeEventListener('touchstart', handleInteraction);
+        };
+    }, [audioEnabled]);
 
     return (
         <div className="flex flex-col h-full items-center justify-center relative p-6 text-center">
