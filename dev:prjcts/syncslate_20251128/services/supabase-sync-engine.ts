@@ -358,13 +358,20 @@ export class SupabaseSyncEngine {
     });
 
     // 購読開始
-    const status = await this.channel.subscribe();
-    if (status === 'SUBSCRIBED') {
-      this.isConnected = true;
-      console.log(`[SupabaseSyncEngine] Subscribed to channel: ${channelName}`);
-    } else {
-      throw new Error(`Failed to subscribe to channel: ${status}`);
-    }
+    const subscribePromise = new Promise<void>((resolve, reject) => {
+      this.channel!.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          this.isConnected = true;
+          console.log(`[SupabaseSyncEngine] Subscribed to channel: ${channelName}`);
+          resolve();
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          this.isConnected = false;
+          reject(new Error(`Failed to subscribe to channel: ${status}`));
+        }
+      });
+    });
+
+    await subscribePromise;
   }
 
   /**
