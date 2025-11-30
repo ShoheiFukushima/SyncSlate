@@ -284,10 +284,18 @@ const useSyncEngine = () => {
     // --- Definitions ---
     
     const handleStopSequence = useCallback((manual: boolean) => {
+        console.log(`[${role}] handleStopSequence called, manual: ${manual}`);
+
+        // Prevent duplicate calls - only process if sequence is actually running
+        if (!startTime) {
+            console.log(`[${role}] Ignoring duplicate stop call - no active sequence`);
+            return;
+        }
+
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
 
         // Log finalization
-        if (startTime && activeLogRef.current) {
+        if (activeLogRef.current) {
             const now = Date.now();
             const diff = (now - startTime) / 1000;
             const mainTime = diff - actionStartTime;
@@ -301,15 +309,14 @@ const useSyncEngine = () => {
             activeLogRef.current = null;
         }
 
-        setStartTime(null);
+        setStartTime(null); // Clear startTime to prevent duplicate calls
 
-        // Only HOST plays "Cut" sound to avoid double playback
-        if (role === 'HOST') {
-            if (settings.voiceCut) {
-                AudioEngine.trigger("Cut", settings.voiceLanguage);
-            } else {
-                AudioEngine.playTone(400, 0.5, 'sawtooth');
-            }
+        // Both HOST and CLIENT play "Cut" sound (each on their own device)
+        if (settings.voiceCut) {
+            console.log(`[${role}] Playing Cut sound`);
+            AudioEngine.trigger("Cut", settings.voiceLanguage);
+        } else {
+            AudioEngine.playTone(400, 0.5, 'sawtooth');
         }
 
         setMode('ENDED');
