@@ -49,6 +49,7 @@ class GeminiAudioEngine {
   private audioContext: AudioContext | null = null;
   private speechSynth: SpeechSynthesis | null = null;
   private audioCache: Map<string, HTMLAudioElement> = new Map();
+  private audioBufferCache: Map<string, AudioBuffer> = new Map();
 
   constructor() {
     this.initSpeech();
@@ -116,8 +117,8 @@ class GeminiAudioEngine {
   }
 
   /**
-   * Play Japanese voice file for numbers (0-60)
-   * Uses pre-recorded voice files from public/voices/
+   * Play Japanese voice file for numbers (0-60) using Web Audio API
+   * Uses AudioContext and AudioBuffer for better Safari/iOS compatibility
    *
    * @param num - Number to speak (0-60)
    * @returns Promise that resolves when playback completes
@@ -128,58 +129,66 @@ class GeminiAudioEngine {
       throw new Error(`Number out of range: ${num} (must be 0-60)`);
     }
 
-    const audioKey = `jp-num-${num}`;
-
-    // Check cache first
-    if (this.audioCache.has(audioKey)) {
-      console.log(`[GeminiAudio] Playing cached Japanese voice for: ${num}`);
-      const audio = this.audioCache.get(audioKey)!;
-      audio.currentTime = 0; // Reset to start
-      return new Promise((resolve, reject) => {
-        audio.onended = () => resolve();
-        audio.onerror = () => {
-          console.error(`[GeminiAudio] Audio playback failed for cached: ${num}`);
-          reject(new Error('Audio playback failed'));
-        };
-        audio.play().catch((err) => {
-          console.error(`[GeminiAudio] Play() failed for cached: ${num}`, err);
-          reject(err);
-        });
-      });
+    const ctx = this.getAudioContext();
+    if (!ctx) {
+      console.error('[GeminiAudio] AudioContext not available');
+      throw new Error('AudioContext not available');
     }
 
-    // Load and cache the audio file
+    // Resume AudioContext if suspended (required for Safari/iOS)
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
+    const audioKey = `jp-num-${num}`;
     const paddedNum = num.toString().padStart(3, '0');
     const audioPath = `/voices/num${paddedNum}_02_01.wav`;
+
+    // Check if buffer is already cached
+    if (this.audioBufferCache.has(audioKey)) {
+      console.log(`[GeminiAudio] Playing cached AudioBuffer for: ${num}`);
+      const buffer = this.audioBufferCache.get(audioKey)!;
+      return this.playAudioBuffer(buffer, ctx);
+    }
+
+    // Load and decode audio file
     console.log(`[GeminiAudio] Loading Japanese voice file: ${audioPath}`);
+    try {
+      const response = await fetch(audioPath);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
-    return new Promise((resolve, reject) => {
-      const audio = new Audio(audioPath);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-      audio.oncanplaythrough = () => {
-        console.log(`[GeminiAudio] Audio loaded successfully: ${audioPath}`);
-        // Cache the audio element for future use
-        this.audioCache.set(audioKey, audio);
+      console.log(`[GeminiAudio] Audio decoded successfully: ${audioPath}`);
+      // Cache the decoded buffer
+      this.audioBufferCache.set(audioKey, audioBuffer);
 
-        audio.onended = () => {
-          console.log(`[GeminiAudio] Audio playback completed: ${audioPath}`);
-          resolve();
-        };
-        audio.onerror = () => {
-          console.error(`[GeminiAudio] Audio playback failed: ${audioPath}`);
-          reject(new Error('Audio playback failed'));
-        };
-        audio.play().catch((err) => {
-          console.error(`[GeminiAudio] Play() failed: ${audioPath}`, err);
-          reject(err);
-        });
+      return this.playAudioBuffer(audioBuffer, ctx);
+    } catch (error) {
+      console.error(`[GeminiAudio] Failed to load/decode audio: ${audioPath}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Play an AudioBuffer using Web Audio API
+   */
+  private playAudioBuffer(buffer: AudioBuffer, ctx: AudioContext): Promise<void> {
+    return new Promise((resolve) => {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+
+      source.onended = () => {
+        console.log('[GeminiAudio] AudioBuffer playback completed');
+        resolve();
       };
 
-      audio.onerror = (err) => {
-        console.error(`[GeminiAudio] Failed to load audio: ${audioPath}`, err);
-        reject(new Error(`Failed to load audio: ${audioPath}`));
-      };
-      audio.load();
+      source.start(0);
+      console.log('[GeminiAudio] AudioBuffer playback started');
     });
   }
 
