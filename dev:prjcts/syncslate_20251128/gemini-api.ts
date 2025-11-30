@@ -137,7 +137,11 @@ class GeminiAudioEngine {
 
     // Resume AudioContext if suspended (required for Safari/iOS)
     if (ctx.state === 'suspended') {
+      console.log('[GeminiAudio] AudioContext is suspended, resuming...');
       await ctx.resume();
+      console.log(`[GeminiAudio] AudioContext resumed, new state: ${ctx.state}`);
+    } else {
+      console.log(`[GeminiAudio] AudioContext state is already: ${ctx.state}`);
     }
 
     const audioKey = `jp-num-${num}`;
@@ -177,18 +181,33 @@ class GeminiAudioEngine {
    * Play an AudioBuffer using Web Audio API
    */
   private playAudioBuffer(buffer: AudioBuffer, ctx: AudioContext): Promise<void> {
+    console.log(`[GeminiAudio] AudioContext state: ${ctx.state}`);
+    console.log(`[GeminiAudio] AudioContext sampleRate: ${ctx.sampleRate}`);
+    console.log(`[GeminiAudio] AudioBuffer duration: ${buffer.duration}s`);
+
     return new Promise((resolve) => {
       const source = ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(ctx.destination);
+
+      // Create GainNode for volume control (iOS compatibility)
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 1.0; // Full volume
+
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
 
       source.onended = () => {
         console.log('[GeminiAudio] AudioBuffer playback completed');
         resolve();
       };
 
-      source.start(0);
-      console.log('[GeminiAudio] AudioBuffer playback started');
+      try {
+        source.start(0);
+        console.log('[GeminiAudio] AudioBuffer playback started successfully');
+      } catch (error) {
+        console.error('[GeminiAudio] Failed to start AudioBuffer playback:', error);
+        resolve(); // Resolve anyway to avoid hanging
+      }
     });
   }
 

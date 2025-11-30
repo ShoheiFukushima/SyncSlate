@@ -302,11 +302,14 @@ const useSyncEngine = () => {
         }
 
         setStartTime(null);
-        
-        if (settings.voiceCut) {
-            AudioEngine.trigger("Cut", settings.voiceLanguage);
-        } else {
-            AudioEngine.playTone(400, 0.5, 'sawtooth');
+
+        // Only HOST plays "Cut" sound to avoid double playback
+        if (role === 'HOST') {
+            if (settings.voiceCut) {
+                AudioEngine.trigger("Cut", settings.voiceLanguage);
+            } else {
+                AudioEngine.playTone(400, 0.5, 'sawtooth');
+            }
         }
 
         setMode('ENDED');
@@ -314,7 +317,7 @@ const useSyncEngine = () => {
         setTimeout(() => {
             setMode('SETUP');
         }, 2000);
-    }, [settings.voiceCut, settings.voiceLanguage, startTime, actionStartTime]);
+    }, [role, settings.voiceCut, settings.voiceLanguage, startTime, actionStartTime]);
 
     const stop = useCallback(async () => {
         if (role === 'CLIENT') return;
