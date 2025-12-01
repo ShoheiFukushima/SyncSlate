@@ -294,6 +294,11 @@ const useSyncEngine = () => {
     // Supabase Session State
     const [supabaseSessionId, setSupabaseSessionId] = useState<string | null>(null);
 
+    // Audio Preload State
+    const [preloadProgress, setPreloadProgress] = useState<number>(0);
+    const [isPreloading, setIsPreloading] = useState<boolean>(false);
+    const preloadStartedRef = useRef<boolean>(false);
+
     // Ref to hold the tick function to allow safe recursion without circular dependencies
     const tickRef = useRef<() => void>(() => {});
 
@@ -847,9 +852,53 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
         };
     }, [audioEnabled, engine.settings.voiceLanguage]);
 
+    // Preload Japanese voice files when language is set to Japanese
+    useEffect(() => {
+        // Only preload for Japanese language
+        if (settings.voiceLanguage !== 'jp') {
+            return;
+        }
+
+        // Only preload once
+        if (preloadStartedRef.current) {
+            return;
+        }
+
+        const startPreload = async () => {
+            preloadStartedRef.current = true;
+            setIsPreloading(true);
+            console.log('[Audio Preload] Starting Japanese voice preload...');
+
+            try {
+                const audioEngine = getGeminiAudioEngine();
+                await audioEngine.preloadJapaneseVoices(
+                    { start: 0, end: 60 },
+                    (progress) => {
+                        setPreloadProgress(progress);
+                        if (progress % 20 === 0 || progress === 100) {
+                            console.log(`[Audio Preload] Progress: ${progress}%`);
+                        }
+                    }
+                );
+                console.log('[Audio Preload] Completed successfully');
+            } catch (error) {
+                console.error('[Audio Preload] Failed:', error);
+            } finally {
+                setIsPreloading(false);
+            }
+        };
+
+        // Start preload after a short delay to not block initial render
+        const timeoutId = setTimeout(() => {
+            startPreload();
+        }, 1000);
+
+        return () => clearTimeout(timeoutId);
+    }, [settings.voiceLanguage]);
+
     return (
         <div className="flex flex-col h-full items-center justify-center relative p-6 text-center">
-            
+
             {/* Connection Status Indicator */}
             <div className="absolute top-6 right-6 flex items-center gap-2">
                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
@@ -857,6 +906,16 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
                     Signal Active
                  </span>
             </div>
+
+            {/* Audio Preload Indicator */}
+            {isPreloading && (
+                <div className="absolute top-6 left-6 flex items-center gap-2 bg-blue-500/10 px-3 py-2 rounded-lg backdrop-blur-sm">
+                    <Volume2 className="w-3 h-3 text-blue-500 animate-pulse" />
+                    <span className={clsx("text-xs font-mono", isDark ? "text-blue-400" : "text-blue-600")}>
+                        Loading voices... {preloadProgress}%
+                    </span>
+                </div>
+            )}
 
             <div className="space-y-8 max-w-md w-full relative z-10">
                 <div className="space-y-2">

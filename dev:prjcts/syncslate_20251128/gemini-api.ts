@@ -50,6 +50,9 @@ class GeminiAudioEngine {
   private speechSynth: SpeechSynthesis | null = null;
   private audioCache: Map<string, HTMLAudioElement> = new Map();
   private audioBufferCache: Map<string, AudioBuffer> = new Map();
+  private preloadProgress: number = 0;
+  private isPreloading: boolean = false;
+  private preloadCompleted: boolean = false;
 
   constructor() {
     this.initSpeech();
@@ -312,6 +315,142 @@ class GeminiAudioEngine {
    */
   getVoices(): SpeechSynthesisVoice[] {
     return this.speechSynth?.getVoices() || [];
+  }
+
+  /**
+   * Preload Japanese voice files (0-60) to eliminate playback delays
+   *
+   * This method preloads all countdown voice files in the background
+   * to ensure instant playback when needed. Uses progressive loading
+   * to avoid blocking the UI.
+   *
+   * @param range - Range to preload (default: 0-60)
+   * @param onProgress - Optional callback for progress updates (0-100)
+   * @returns Promise that resolves when preloading completes
+   */
+  async preloadJapaneseVoices(
+    range: { start: number; end: number } = { start: 0, end: 60 },
+    onProgress?: (progress: number) => void
+  ): Promise<void> {
+    if (this.isPreloading) {
+      console.log('[GeminiAudio] Preload already in progress');
+      return;
+    }
+
+    if (this.preloadCompleted) {
+      console.log('[GeminiAudio] Preload already completed');
+      return;
+    }
+
+    this.isPreloading = true;
+    this.preloadProgress = 0;
+
+    const ctx = this.getAudioContext();
+    if (!ctx) {
+      console.error('[GeminiAudio] AudioContext not available for preload');
+      this.isPreloading = false;
+      return;
+    }
+
+    // Resume AudioContext if suspended
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+      } catch (error) {
+        console.warn('[GeminiAudio] Failed to resume AudioContext:', error);
+      }
+    }
+
+    const { start, end } = range;
+    const total = end - start + 1;
+    let loaded = 0;
+    let succeeded = 0;
+    let failed = 0;
+
+    console.log(`[GeminiAudio] Starting preload: ${start}-${end} (${total} files)`);
+
+    // Load files in batches to avoid overwhelming the network
+    const batchSize = 5;
+    for (let i = start; i <= end; i += batchSize) {
+      const batchEnd = Math.min(i + batchSize - 1, end);
+      const batch: Promise<void>[] = [];
+
+      for (let num = i; num <= batchEnd; num++) {
+        const audioKey = `jp-num-${num}`;
+
+        // Skip if already cached
+        if (this.audioBufferCache.has(audioKey)) {
+          loaded++;
+          succeeded++;
+          this.preloadProgress = Math.round((loaded / total) * 100);
+          onProgress?.(this.preloadProgress);
+          continue;
+        }
+
+        const paddedNum = num.toString().padStart(3, '0');
+        const audioPath = `/voices/num${paddedNum}_02_01.wav`;
+
+        // Load and decode audio file
+        const loadPromise = (async () => {
+          try {
+            const response = await fetch(audioPath);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+            // Cache the decoded buffer
+            this.audioBufferCache.set(audioKey, audioBuffer);
+            succeeded++;
+          } catch (error) {
+            console.warn(`[GeminiAudio] Failed to preload ${audioPath}:`, error);
+            failed++;
+          } finally {
+            loaded++;
+            this.preloadProgress = Math.round((loaded / total) * 100);
+            onProgress?.(this.preloadProgress);
+          }
+        })();
+
+        batch.push(loadPromise);
+      }
+
+      // Wait for current batch to complete before starting next
+      await Promise.all(batch);
+
+      // Small delay between batches to prevent network congestion
+      if (batchEnd < end) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+
+    this.isPreloading = false;
+    this.preloadCompleted = true;
+
+    console.log(`[GeminiAudio] Preload completed: ${succeeded} succeeded, ${failed} failed`);
+  }
+
+  /**
+   * Get preload progress (0-100)
+   */
+  getPreloadProgress(): number {
+    return this.preloadProgress;
+  }
+
+  /**
+   * Check if preload is in progress
+   */
+  isPreloadingVoices(): boolean {
+    return this.isPreloading;
+  }
+
+  /**
+   * Check if preload is completed
+   */
+  isPreloadComplete(): boolean {
+    return this.preloadCompleted;
   }
 }
 
