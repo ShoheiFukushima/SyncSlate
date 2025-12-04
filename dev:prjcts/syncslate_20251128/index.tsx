@@ -97,6 +97,18 @@ type SyncMessage =
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 /**
+ * UUID v4 を生成（RFC4122準拠）
+ * Supabaseのセッション用
+ */
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+/**
  * useDebounce Hook
  * 値の変更を指定時間遅延させることで、連続した更新を抑制する
  *
@@ -1170,7 +1182,8 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
 
     const getShareUrl = () => {
         const baseUrl = window.location.origin + window.location.pathname;
-        const sessionId = engine.supabaseSessionId || generateId();
+        // Supabaseモードの場合はUUID形式のセッションIDを使用
+        const sessionId = engine.supabaseSessionId || generateUUID();
         return `${baseUrl}?role=client&session=${sessionId}`;
     };
 
