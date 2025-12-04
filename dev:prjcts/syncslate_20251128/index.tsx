@@ -855,12 +855,12 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
     // Preload Japanese voice files when language is set to Japanese
     useEffect(() => {
         // Safety check: ensure settings is defined
-        if (!settings || !settings.voiceLanguage) {
+        if (!engine.settings || !engine.settings.voiceLanguage) {
             return;
         }
 
         // Only preload for Japanese language
-        if (settings.voiceLanguage !== 'jp') {
+        if (engine.settings.voiceLanguage !== 'jp') {
             return;
         }
 
@@ -899,7 +899,7 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
         }, 1000);
 
         return () => clearTimeout(timeoutId);
-    }, [settings?.voiceLanguage]);
+    }, [engine.settings?.voiceLanguage]);
 
     return (
         <div className="flex flex-col h-full items-center justify-center relative p-6 text-center">
