@@ -93,7 +93,7 @@ export class SupabaseSyncEngine {
           color_ranges: colorRanges,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
       if (!session) throw new Error('Failed to create session');
@@ -127,7 +127,7 @@ export class SupabaseSyncEngine {
         .from('sync_sessions')
         .select('*')
         .eq('id', sessionId)
-        .single();
+        .maybeSingle();
 
       if (sessionError) throw sessionError;
       if (!session) throw new Error('Session not found');
@@ -143,7 +143,7 @@ export class SupabaseSyncEngine {
           role: this.config.role,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (deviceError) throw deviceError;
       if (!device) throw new Error('Failed to join session');
