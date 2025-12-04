@@ -686,7 +686,9 @@ const useSyncEngine = () => {
         sequenceLogs,
         syncMode,
         setSyncMode,
-        supabaseSessionId
+        supabaseSessionId,
+        isPreloading,
+        preloadProgress
     };
 };
 
@@ -913,11 +915,11 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
             </div>
 
             {/* Audio Preload Indicator */}
-            {isPreloading && (
+            {engine.isPreloading && (
                 <div className="absolute top-6 left-6 flex items-center gap-2 bg-blue-500/10 px-3 py-2 rounded-lg backdrop-blur-sm">
                     <Volume2 className="w-3 h-3 text-blue-500 animate-pulse" />
                     <span className={clsx("text-xs font-mono", isDark ? "text-blue-400" : "text-blue-600")}>
-                        Loading voices... {preloadProgress}%
+                        Loading voices... {engine.preloadProgress}%
                     </span>
                 </div>
             )}
