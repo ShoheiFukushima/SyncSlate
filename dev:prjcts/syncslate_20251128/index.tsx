@@ -918,71 +918,135 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
     }, [engine.settings?.voiceLanguage]);
 
     return (
-        <div className="flex flex-col h-full items-center justify-center relative p-6 text-center">
-
-            {/* Connection Status Indicator */}
-            <div className="absolute top-6 right-6 flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                 <span className={clsx("text-xs font-mono font-bold uppercase tracking-wider", isDark ? "text-emerald-500" : "text-emerald-700")}>
-                    Signal Active
-                 </span>
-            </div>
-
-            {/* Audio Preload Indicator */}
-            {localIsPreloading && (
-                <div className="absolute top-6 left-6 flex items-center gap-2 bg-blue-500/10 px-3 py-2 rounded-lg backdrop-blur-sm">
-                    <Volume2 className="w-3 h-3 text-blue-500 animate-pulse" />
-                    <span className={clsx("text-xs font-mono", isDark ? "text-blue-400" : "text-blue-600")}>
-                        Loading voices... {localPreloadProgress}%
-                    </span>
-                </div>
-            )}
-
-            <div className="space-y-8 max-w-md w-full relative z-10">
-                <div className="space-y-2">
-                    {/* Placeholder for removed icon to maintain layout */}
-                    <div className="w-16 h-16 mx-auto mb-4" />
-                    <h2 className={clsx("text-3xl font-black uppercase tracking-tighter", isDark ? "text-white" : "text-neutral-900")}>
-                        Client Mode
-                    </h2>
-                    <p className={clsx("text-sm font-mono uppercase tracking-widest opacity-60", isDark ? "text-neutral-400" : "text-neutral-500")}>
-                        Awaiting Host Trigger
-                    </p>
+        <div className="flex flex-col h-full relative">
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col items-center justify-center relative p-6 text-center">
+                {/* Connection Status Indicator */}
+                <div className="absolute top-6 right-6 flex items-center gap-2">
+                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                     <span className={clsx("text-xs font-mono font-bold uppercase tracking-wider", isDark ? "text-emerald-500" : "text-emerald-700")}>
+                        Signal Active
+                     </span>
                 </div>
 
-                {/* Audio Permission Gate */}
-                {!audioEnabled ? (
-                    <button 
-                        onClick={enableAudio}
-                        className={clsx(
-                            "w-full py-4 rounded-lg border-2 border-dashed flex items-center justify-center gap-3 transition-all hover:border-solid group",
-                            isDark ? "border-neutral-700 hover:border-emerald-500 hover:bg-emerald-500/10" : "border-neutral-300 hover:border-emerald-500 hover:bg-emerald-50"
-                        )}
-                    >
-                        <Volume2 className={clsx("w-5 h-5 group-hover:text-emerald-500 transition-colors", isDark ? "text-neutral-500" : "text-neutral-400")} />
-                        <span className={clsx("text-sm font-bold uppercase tracking-wider group-hover:text-emerald-500 transition-colors", isDark ? "text-neutral-500" : "text-neutral-500")}>
-                            Click to Enable Audio
+                {/* Audio Preload Indicator */}
+                {localIsPreloading && (
+                    <div className="absolute top-6 left-6 flex items-center gap-2 bg-blue-500/10 px-3 py-2 rounded-lg backdrop-blur-sm">
+                        <Volume2 className="w-3 h-3 text-blue-500 animate-pulse" />
+                        <span className={clsx("text-xs font-mono", isDark ? "text-blue-400" : "text-blue-600")}>
+                            Loading voices... {localPreloadProgress}%
                         </span>
-                    </button>
-                ) : (
-                    <div className={clsx("w-full py-3 rounded-lg border flex items-center justify-center gap-2", isDark ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-500" : "bg-emerald-50 border-emerald-200 text-emerald-600")}>
-                        <Volume2 className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-wider">Audio Active</span>
                     </div>
                 )}
 
-                <div className={clsx("text-[10px] font-mono p-4 rounded border mt-8 text-left space-y-2 opacity-70", isDark ? "bg-neutral-900 border-neutral-800 text-neutral-500" : "bg-neutral-100 border-neutral-200 text-neutral-500")}>
-                    <div className="flex justify-between">
-                        <span>CHANNEL:</span>
-                        <span className="text-emerald-500">{SYNC_CHANNEL_NAME}</span>
+                <div className="space-y-8 max-w-md w-full relative z-10">
+                    <div className="space-y-2">
+                        {/* Placeholder for removed icon to maintain layout */}
+                        <div className="w-16 h-16 mx-auto mb-4" />
+                        <h2 className={clsx("text-3xl font-black uppercase tracking-tighter", isDark ? "text-white" : "text-neutral-900")}>
+                            Client Mode
+                        </h2>
+                        <p className={clsx("text-sm font-mono uppercase tracking-widest opacity-60", isDark ? "text-neutral-400" : "text-neutral-500")}>
+                            Awaiting Host Trigger
+                        </p>
                     </div>
-                    <div className="flex justify-between">
-                        <span>DURATION:</span>
-                        <span>{engine.settings.duration}s</span>
+
+                    {/* Audio Permission Gate */}
+                    {!audioEnabled ? (
+                        <button
+                            onClick={enableAudio}
+                            className={clsx(
+                                "w-full py-4 rounded-lg border-2 border-dashed flex items-center justify-center gap-3 transition-all hover:border-solid group",
+                                isDark ? "border-neutral-700 hover:border-emerald-500 hover:bg-emerald-500/10" : "border-neutral-300 hover:border-emerald-500 hover:bg-emerald-50"
+                            )}
+                        >
+                            <Volume2 className={clsx("w-5 h-5 group-hover:text-emerald-500 transition-colors", isDark ? "text-neutral-500" : "text-neutral-400")} />
+                            <span className={clsx("text-sm font-bold uppercase tracking-wider group-hover:text-emerald-500 transition-colors", isDark ? "text-neutral-500" : "text-neutral-500")}>
+                                Click to Enable Audio
+                            </span>
+                        </button>
+                    ) : (
+                        <div className={clsx("w-full py-3 rounded-lg border flex items-center justify-center gap-2", isDark ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-500" : "bg-emerald-50 border-emerald-200 text-emerald-600")}>
+                            <Volume2 className="w-4 h-4" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Audio Active</span>
+                        </div>
+                    )}
+
+                    <div className={clsx("text-[10px] font-mono p-4 rounded border mt-8 text-left space-y-2 opacity-70", isDark ? "bg-neutral-900 border-neutral-800 text-neutral-500" : "bg-neutral-100 border-neutral-200 text-neutral-500")}>
+                        <div className="flex justify-between">
+                            <span>CHANNEL:</span>
+                            <span className="text-emerald-500">{SYNC_CHANNEL_NAME}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span>DURATION:</span>
+                            <span>{engine.settings.duration}s</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span>PRE-ROLL:</span>
+                            <span>{engine.settings.preRoll}s</span>
+                        </div>
                     </div>
-                    <div className="flex justify-between">
-                        <span>PRE-ROLL:</span>
-                        <span>{engine.settings.preRoll}s</span>
+                </div>
+            </div>
+
+            {/* Promotional Footer */}
+            <div className={clsx("border-t p-6 space-y-4", isDark ? "bg-neutral-900/50 border-neutral-800" : "bg-neutral-50/50 border-neutral-200")}>
+                <div className="max-w-2xl mx-auto space-y-4">
+                    {/* SyncSlate Promotion */}
+                    <div className="text-center space-y-2">
+                        <h3 className={clsx("text-lg font-bold", isDark ? "text-white" : "text-neutral-900")}>
+                            ⚡ SyncSlate AI
+                        </h3>
+                        <p className={clsx("text-sm leading-relaxed", isDark ? "text-neutral-400" : "text-neutral-600")}>
+                            クロスデバイス同期対応のプロフェッショナル・スレートタイマー。<br />
+                            HOST側で全デバイスを一括制御、CLIENT側は永久無料。
+                        </p>
+                        <div className="flex items-center justify-center gap-3 pt-2">
+                            <a
+                                href="/?role=host"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    alert('HOSTモードはアカウント登録が必要です。\n近日公開予定！');
+                                }}
+                                className={clsx(
+                                    "px-4 py-2 rounded-lg font-bold text-sm transition-all",
+                                    isDark
+                                        ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                                        : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                                )}
+                            >
+                                HOSTモードを試す
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* Platform Core Promotion */}
+                    <div className={clsx("border-t pt-4 text-center space-y-2", isDark ? "border-neutral-800" : "border-neutral-200")}>
+                        <h4 className={clsx("text-sm font-bold flex items-center justify-center gap-2", isDark ? "text-neutral-300" : "text-neutral-700")}>
+                            <Globe className="w-4 h-4" />
+                            Powered by SaaS Platform Core
+                        </h4>
+                        <p className={clsx("text-xs leading-relaxed", isDark ? "text-neutral-500" : "text-neutral-500")}>
+                            認証・課金・ユーザー管理を統合したSaaSプラットフォーム基盤。<br />
+                            Clerk認証、Stripe課金、使用量追跡を数分で実装可能。
+                        </p>
+                        <a
+                            href="https://github.com/yourusername/saas-platform-core"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={clsx(
+                                "inline-flex items-center gap-2 text-xs font-mono hover:underline",
+                                isDark ? "text-blue-400" : "text-blue-600"
+                            )}
+                        >
+                            <Share2 className="w-3 h-3" />
+                            GitHub で詳細を見る
+                        </a>
+                    </div>
+
+                    {/* Footer Credits */}
+                    <div className={clsx("text-center text-[10px] font-mono pt-2", isDark ? "text-neutral-600" : "text-neutral-400")}>
+                        © 2024 SyncSlate AI • Client Mode is Forever Free
                     </div>
                 </div>
             </div>
