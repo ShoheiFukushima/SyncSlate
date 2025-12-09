@@ -994,7 +994,7 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
     return (
         <div className="flex flex-col h-full relative">
             {/* Main Content */}
-            <div className="flex-1 flex flex-col items-center justify-center relative p-6 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center relative p-6 text-center max-w-4xl mx-auto w-full">
                 {/* Connection Status Indicator */}
                 <div className="absolute top-6 right-6 flex items-center gap-2">
                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
@@ -1368,7 +1368,7 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
 
     return (
         <>
-        <main className="flex-1 min-h-0 overflow-y-auto px-4 py-6 space-y-6 relative z-10 pb-32">
+        <main className="flex-1 min-h-0 overflow-y-auto px-4 py-6 space-y-6 relative z-10 pb-32 max-w-4xl mx-auto w-full">
           {/* Section: Share Session - CRITICAL FOR CLIENT MODE */}
           <section className="space-y-4">
              <div className="flex justify-between items-center pl-1">
@@ -1480,16 +1480,24 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
                         <div className="p-2 bg-emerald-500/10 rounded text-emerald-600"><Clock className="w-4 h-4" /></div>
                         <div className={clsx("font-bold text-sm", textClass)}>Pre-Roll</div>
                     </div>
-                    <div className={clsx("font-mono text-sm font-bold px-2 py-1 rounded min-w-[2.5rem] text-center", isDark ? "bg-white text-black" : "bg-neutral-900 text-white")}>
+                    <div className={clsx("font-mono text-sm font-bold px-3 py-1.5 rounded min-w-[3.5rem] text-center", isDark ? "bg-white text-black" : "bg-neutral-900 text-white")}>
                       {engine.settings.preRoll}s
                     </div>
                 </div>
-                
-                <input 
-                    type="range" min="0" max="10" 
-                    value={engine.settings.preRoll} 
-                    onChange={(e) => engine.setSettings(s => ({...s, preRoll: parseInt(e.target.value)}))}
-                    style={{ 
+
+                <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    step="1"
+                    value={engine.settings.preRoll || 0}
+                    onChange={(e) => {
+                        const newValue = parseInt(e.target.value, 10);
+                        if (!isNaN(newValue)) {
+                            engine.setSettings(s => ({...s, preRoll: newValue}));
+                        }
+                    }}
+                    style={{
                         '--track-color': isDark ? '#404040' : '#e5e5e5',
                         '--thumb-color': '#4f46e5',
                         '--thumb-border': '#ffffff'
@@ -1755,7 +1763,7 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
 
         {/* Footer */}
         <footer className={clsx("fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-md shadow-[0_-1px_10px_rgba(0,0,0,0.05)]", isDark ? "bg-neutral-900/90 border-neutral-800" : "bg-white/90 border-neutral-200")}>
-           <div className="max-w-lg mx-auto w-full p-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
+           <div className="max-w-4xl mx-auto w-full p-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
               <button 
                 onClick={engine.start}
                 className={clsx(
