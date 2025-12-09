@@ -1451,7 +1451,7 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
           </section>
 
           {/* Section: Timeline */}
-          <section className="space-y-4">
+          <section className="space-y-4 max-w-4xl mx-auto">
              <div className="flex justify-between items-center pl-1">
                  <div className={clsx("text-[10px] font-mono uppercase tracking-widest", subTextClass)}>// Sequence Config</div>
              </div>
