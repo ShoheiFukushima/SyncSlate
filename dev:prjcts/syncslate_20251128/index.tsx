@@ -17,6 +17,7 @@ import {
   Monitor,
   Radio,
   Volume2,
+  VolumeX,
   Settings as SettingsIcon,
   X,
   Check,
@@ -193,6 +194,14 @@ const AudioEngine = {
 
         // Attempt voice synthesis with fallback
         await triggerVoice(text, language, fallbackTone);
+    },
+    setMuted: (muted: boolean) => {
+        const engine = getGeminiAudioEngine();
+        engine.setMuted(muted);
+    },
+    isMuted: () => {
+        const engine = getGeminiAudioEngine();
+        return engine.isMuted();
     }
 };
 
@@ -707,6 +716,13 @@ const useSyncEngine = () => {
 
 const SlateOverlay = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>, theme: Theme }) => {
     const isDark = theme === 'dark';
+    const [isMuted, setIsMuted] = useState<boolean>(false);
+
+    const toggleMute = () => {
+        const newMutedState = !isMuted;
+        setIsMuted(newMutedState);
+        AudioEngine.setMuted(newMutedState);
+    };
 
     const getSlateDisplay = () => {
         if (engine.mode === 'ENDED') return { text: "CUT!", color: '#000000', bgColor: '#ef4444' };
@@ -798,20 +814,40 @@ const SlateOverlay = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngi
               {slateState.text}
            </div>
 
-           {(engine.mode === 'COUNTDOWN' || engine.mode === 'ARMED') && engine.role === 'HOST' && (
-             <button 
-                  onClick={engine.stop}
-                  className="fixed bottom-10 z-50 px-8 py-4 rounded-full backdrop-blur-md border font-bold text-lg tracking-widest uppercase transition-all active:scale-95 flex items-center gap-3 shadow-lg"
-                  style={{ 
-                      color: getContrastColor(slateState.bgColor),
-                      backgroundColor: hexToRgba(getContrastColor(slateState.bgColor), 0.1),
-                      borderColor: hexToRgba(getContrastColor(slateState.bgColor), 0.2),
-                      fontFamily: "'Inter', sans-serif" 
-                   }} 
-                >
-                  <Square className="w-5 h-5 fill-current" />
-                  CUT
-             </button>
+           {/* Control Buttons - Show for both HOST and CLIENT during running */}
+           {(engine.mode === 'COUNTDOWN' || engine.mode === 'ARMED') && (
+             <>
+               {/* Mute Button - Available for both HOST and CLIENT */}
+               <button
+                    onClick={toggleMute}
+                    className="fixed bottom-10 left-6 z-50 w-14 h-14 rounded-full backdrop-blur-md border font-bold transition-all active:scale-95 flex items-center justify-center shadow-lg"
+                    style={{
+                        color: isMuted ? '#ef4444' : getContrastColor(slateState.bgColor),
+                        backgroundColor: hexToRgba(getContrastColor(slateState.bgColor), isMuted ? 0.2 : 0.1),
+                        borderColor: hexToRgba(getContrastColor(slateState.bgColor), 0.2),
+                     }}
+                    aria-label={isMuted ? "音声をオンにする" : "音声をミュートする"}
+                  >
+                    {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+               </button>
+
+               {/* CUT Button - HOST only */}
+               {engine.role === 'HOST' && (
+                 <button
+                      onClick={engine.stop}
+                      className="fixed bottom-10 z-50 px-8 py-4 rounded-full backdrop-blur-md border font-bold text-lg tracking-widest uppercase transition-all active:scale-95 flex items-center gap-3 shadow-lg"
+                      style={{
+                          color: getContrastColor(slateState.bgColor),
+                          backgroundColor: hexToRgba(getContrastColor(slateState.bgColor), 0.1),
+                          borderColor: hexToRgba(getContrastColor(slateState.bgColor), 0.2),
+                          fontFamily: "'Inter', sans-serif"
+                       }}
+                    >
+                      <Square className="w-5 h-5 fill-current" />
+                      CUT
+                 </button>
+               )}
+             </>
            )}
         </div>
     );
@@ -822,41 +858,79 @@ const SlateOverlay = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngi
 const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>, theme: Theme }) => {
     const isDark = theme === 'dark';
     const [audioEnabled, setAudioEnabled] = useState(false);
+    const [audioError, setAudioError] = useState<string | null>(null);
     const preloadStartedRef = useRef<boolean>(false);
     const [localPreloadProgress, setLocalPreloadProgress] = useState<number>(0);
     const [localIsPreloading, setLocalIsPreloading] = useState<boolean>(false);
+    const audioRetryCountRef = useRef<number>(0);
+    const maxRetries = 3;
 
-    const enableAudio = async () => {
+    const enableAudio = async (): Promise<boolean> => {
         console.log('[CLIENT] Enabling audio...');
-        AudioEngine.resume();
+        setAudioError(null);
 
-        // Play a test sound to unlock audio playback on iOS/Safari
-        // This is required because Safari blocks audio playback without user interaction
         try {
-            if (engine.settings.voiceLanguage === 'jp') {
-                // For Japanese, play voice file for "0" as test
-                console.log('[CLIENT] Playing test Japanese voice to unlock audio...');
-                await AudioEngine.trigger('0', 'jp');
-            } else {
-                // For other languages, play a short tone
-                console.log('[CLIENT] Playing test tone to unlock audio...');
-                AudioEngine.playTone(800, 0.1, 'sine');
-            }
-            console.log('[CLIENT] Audio unlocked successfully');
-        } catch (error) {
-            console.warn('[CLIENT] Failed to unlock audio:', error);
-        }
+            // Step 1: Resume AudioContext
+            AudioEngine.resume();
 
-        setAudioEnabled(true);
+            // Step 2: Play a test sound to verify audio is actually working
+            // Use a simple tone for all languages to ensure reliability
+            console.log('[CLIENT] Playing test tone to verify audio...');
+
+            // Create a promise that resolves when tone is confirmed playing
+            await new Promise<void>((resolve, reject) => {
+                try {
+                    AudioEngine.playTone(440, 0.15, 'sine');
+                    // Give it a moment to start playing
+                    setTimeout(() => resolve(), 200);
+                } catch (error) {
+                    reject(error);
+                }
+            });
+
+            console.log('[CLIENT] Audio unlocked successfully');
+            setAudioEnabled(true);
+            audioRetryCountRef.current = 0; // Reset retry count on success
+            return true;
+
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.error('[CLIENT] Failed to enable audio:', errorMsg);
+
+            audioRetryCountRef.current++;
+
+            if (audioRetryCountRef.current < maxRetries) {
+                setAudioError(`音声の有効化に失敗しました。もう一度タップしてください。(${audioRetryCountRef.current}/${maxRetries})`);
+            } else {
+                setAudioError('音声の有効化に失敗しました。ブラウザの設定を確認するか、ページを再読み込みしてください。');
+            }
+
+            return false;
+        }
     };
 
-    // Auto-enable audio on any user interaction
+    // Manual audio enable button click handler
+    const handleEnableAudioClick = async () => {
+        await enableAudio();
+    };
+
+    // Auto-enable audio on any user interaction (with retry support)
     useEffect(() => {
         if (audioEnabled) return;
 
         const handleInteraction = async () => {
             console.log('[CLIENT] Auto-enabling audio on user interaction');
-            await enableAudio();
+            const success = await enableAudio();
+
+            // If failed and retries available, keep listening for more interactions
+            if (!success && audioRetryCountRef.current < maxRetries) {
+                console.log('[CLIENT] Audio enable failed, will retry on next interaction');
+                // Re-attach listeners for retry
+                setTimeout(() => {
+                    window.addEventListener('click', handleInteraction, { once: true });
+                    window.addEventListener('touchstart', handleInteraction, { once: true });
+                }, 100);
+            }
         };
 
         window.addEventListener('click', handleInteraction, { once: true });
@@ -866,7 +940,7 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
             window.removeEventListener('click', handleInteraction);
             window.removeEventListener('touchstart', handleInteraction);
         };
-    }, [audioEnabled, engine.settings.voiceLanguage]);
+    }, [audioEnabled]);
 
     // Preload Japanese voice files when language is set to Japanese
     useEffect(() => {
@@ -953,18 +1027,42 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
 
                     {/* Audio Permission Gate */}
                     {!audioEnabled ? (
-                        <button
-                            onClick={enableAudio}
-                            className={clsx(
-                                "w-full py-4 rounded-lg border-2 border-dashed flex items-center justify-center gap-3 transition-all hover:border-solid group",
-                                isDark ? "border-neutral-700 hover:border-emerald-500 hover:bg-emerald-500/10" : "border-neutral-300 hover:border-emerald-500 hover:bg-emerald-50"
+                        <div className="space-y-3">
+                            <button
+                                onClick={handleEnableAudioClick}
+                                className={clsx(
+                                    "w-full py-4 rounded-lg border-2 border-dashed flex items-center justify-center gap-3 transition-all hover:border-solid group",
+                                    audioError
+                                        ? (isDark ? "border-red-700 hover:border-red-500 hover:bg-red-500/10" : "border-red-300 hover:border-red-500 hover:bg-red-50")
+                                        : (isDark ? "border-neutral-700 hover:border-emerald-500 hover:bg-emerald-500/10" : "border-neutral-300 hover:border-emerald-500 hover:bg-emerald-50")
+                                )}
+                            >
+                                <Volume2 className={clsx(
+                                    "w-5 h-5 transition-colors",
+                                    audioError
+                                        ? "text-red-500"
+                                        : (isDark ? "text-neutral-500 group-hover:text-emerald-500" : "text-neutral-400 group-hover:text-emerald-500")
+                                )} />
+                                <span className={clsx(
+                                    "text-sm font-bold uppercase tracking-wider transition-colors",
+                                    audioError
+                                        ? "text-red-500"
+                                        : (isDark ? "text-neutral-500 group-hover:text-emerald-500" : "text-neutral-500 group-hover:text-emerald-500")
+                                )}>
+                                    {audioError ? 'Retry Audio Enable' : 'Click to Enable Audio'}
+                                </span>
+                            </button>
+
+                            {/* Error Message */}
+                            {audioError && (
+                                <div className={clsx(
+                                    "text-xs p-3 rounded-lg border text-center",
+                                    isDark ? "bg-red-950/30 border-red-900/50 text-red-400" : "bg-red-50 border-red-200 text-red-600"
+                                )}>
+                                    {audioError}
+                                </div>
                             )}
-                        >
-                            <Volume2 className={clsx("w-5 h-5 group-hover:text-emerald-500 transition-colors", isDark ? "text-neutral-500" : "text-neutral-400")} />
-                            <span className={clsx("text-sm font-bold uppercase tracking-wider group-hover:text-emerald-500 transition-colors", isDark ? "text-neutral-500" : "text-neutral-500")}>
-                                Click to Enable Audio
-                            </span>
-                        </button>
+                        </div>
                     ) : (
                         <div className={clsx("w-full py-3 rounded-lg border flex items-center justify-center gap-2", isDark ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-500" : "bg-emerald-50 border-emerald-200 text-emerald-600")}>
                             <Volume2 className="w-4 h-4" />

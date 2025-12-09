@@ -53,6 +53,7 @@ class GeminiAudioEngine {
   private preloadProgress: number = 0;
   private isPreloading: boolean = false;
   private preloadCompleted: boolean = false;
+  private muted: boolean = false;
 
   constructor() {
     this.initSpeech();
@@ -80,6 +81,44 @@ class GeminiAudioEngine {
       }
     }
     return this.audioContext;
+  }
+
+  /**
+   * Ensure AudioContext is in 'running' state
+   *
+   * iOS/Safari requires explicit waiting for state transition.
+   * This method guarantees the AudioContext is ready before audio playback.
+   *
+   * @param maxWaitMs - Maximum wait time in milliseconds (default: 1000ms)
+   * @returns Promise that resolves when AudioContext is running
+   * @throws Error if AudioContext fails to resume within timeout
+   */
+  private async ensureAudioContextRunning(maxWaitMs: number = 1000): Promise<void> {
+    const ctx = this.getAudioContext();
+    if (!ctx) {
+      throw new Error('AudioContext not available');
+    }
+
+    // Already running, no action needed
+    if (ctx.state === 'running') {
+      return;
+    }
+
+    // Resume if suspended
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
+    // Wait for state to become 'running' with timeout
+    const startTime = Date.now();
+    while (ctx.state !== 'running') {
+      if (Date.now() - startTime > maxWaitMs) {
+        throw new Error(`AudioContext failed to resume within ${maxWaitMs}ms (state: ${ctx.state})`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    console.log(`[GeminiAudio] AudioContext is now running (took ${Date.now() - startTime}ms)`);
   }
 
   /**
@@ -124,24 +163,24 @@ class GeminiAudioEngine {
    *
    * @param num - Number to speak (0-60)
    * @returns Promise that resolves when playback completes
+   * @throws Error if AudioContext is unavailable, file loading fails, or playback fails
    */
   private async playJapaneseNumberVoice(num: number): Promise<void> {
     if (num < 0 || num > 60) {
-      console.error(`[GeminiAudio] Number out of range: ${num} (must be 0-60)`);
-      throw new Error(`Number out of range: ${num} (must be 0-60)`);
+      const error = new Error(`Number out of range: ${num} (must be 0-60)`);
+      console.error('[GeminiAudio]', error.message);
+      throw error;
     }
 
-    const ctx = this.getAudioContext();
-    if (!ctx) {
-      console.error('[GeminiAudio] AudioContext not available');
-      throw new Error('AudioContext not available');
+    // Ensure AudioContext is running before attempting playback
+    try {
+      await this.ensureAudioContextRunning();
+    } catch (error) {
+      console.error('[GeminiAudio] Failed to resume AudioContext:', error);
+      throw error;
     }
 
-    // Resume AudioContext if suspended (required for Safari/iOS)
-    if (ctx.state === 'suspended') {
-      await ctx.resume();
-    }
-
+    const ctx = this.getAudioContext()!; // Safe after ensureAudioContextRunning()
     const audioKey = `jp-num-${num}`;
     const paddedNum = num.toString().padStart(3, '0');
     const audioPath = `/voices/num${paddedNum}_02_01.wav`;
@@ -167,16 +206,29 @@ class GeminiAudioEngine {
 
       return this.playAudioBuffer(audioBuffer, ctx);
     } catch (error) {
-      console.error(`[GeminiAudio] Failed to load/decode audio: ${audioPath}`, error);
-      throw error;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[GeminiAudio] Failed to load/decode audio: ${audioPath}`, errorMsg);
+      throw new Error(`Failed to load Japanese voice file: ${errorMsg}`);
     }
   }
 
   /**
    * Play an AudioBuffer using Web Audio API
+   *
+   * @param buffer - AudioBuffer to play
+   * @param ctx - AudioContext instance
+   * @returns Promise that resolves when playback completes
+   * @throws Error if playback fails
    */
   private playAudioBuffer(buffer: AudioBuffer, ctx: AudioContext): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      // Skip playback if muted
+      if (this.muted) {
+        console.log('[GeminiAudio] Playback skipped (muted)');
+        resolve();
+        return;
+      }
+
       const source = ctx.createBufferSource();
       source.buffer = buffer;
 
@@ -191,11 +243,24 @@ class GeminiAudioEngine {
         resolve();
       };
 
+      // Reject on error instead of silently resolving
+      let hasStarted = false;
       try {
         source.start(0);
+        hasStarted = true;
       } catch (error) {
-        console.error('[GeminiAudio] Failed to start AudioBuffer playback:', error);
-        resolve(); // Resolve anyway to avoid hanging
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('[GeminiAudio] Failed to start AudioBuffer playback:', errorMsg);
+        reject(new Error(`AudioBuffer playback failed: ${errorMsg}`));
+      }
+
+      // Safety timeout: if source doesn't end within reasonable time, reject
+      // Most voice files are < 2 seconds, so 5 seconds is generous
+      if (hasStarted) {
+        setTimeout(() => {
+          console.warn('[GeminiAudio] AudioBuffer playback timeout - forcing completion');
+          resolve(); // Resolve (not reject) to avoid blocking subsequent audio
+        }, 5000);
       }
     });
   }
@@ -206,8 +271,15 @@ class GeminiAudioEngine {
    * @param text - Text to speak
    * @param config - Voice configuration
    * @returns Promise that resolves when speech completes
+   * @throws Error if speech synthesis fails and no fallback is available
    */
   async speak(text: string, config: VoiceConfig): Promise<void> {
+    // Skip speech if muted
+    if (this.muted) {
+      console.log('[GeminiAudio] Speech skipped (muted)');
+      return;
+    }
+
     // For Japanese language, check if the text is a number (0-60)
     // If so, use pre-recorded voice files instead of Web Speech API
     if (config.language === 'jp') {
@@ -215,17 +287,20 @@ class GeminiAudioEngine {
       if (!isNaN(num) && num >= 0 && num <= 60) {
         try {
           await this.playJapaneseNumberVoice(num);
-          return;
+          return; // Success - no need for Web Speech API
         } catch (error) {
-          console.warn('[GeminiAudio] Failed to play Japanese voice file, falling back to Web Speech API:', error);
-          // Fall through to Web Speech API
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.warn('[GeminiAudio] Japanese voice file failed, trying Web Speech API:', errorMsg);
+          // Fall through to Web Speech API as fallback
         }
       }
     }
 
+    // Web Speech API fallback
     if (!this.speechSynth) {
-      console.warn('[GeminiAudio] Web Speech API not available');
-      throw new Error('Speech synthesis not supported');
+      const error = new Error('Speech synthesis not supported in this browser');
+      console.error('[GeminiAudio]', error.message);
+      throw error;
     }
 
     // Translate standard phrases
@@ -258,13 +333,13 @@ class GeminiAudioEngine {
 
         utterance.onend = () => resolve();
         utterance.onerror = (event) => {
-          console.error('[GeminiAudio] Speech error:', event);
-          // Don't reject on "interrupted" or "canceled" errors
+          console.error('[GeminiAudio] Speech synthesis error:', event.error);
+          // Don't reject on "interrupted" or "canceled" errors - these are recoverable
           if (event.error === 'interrupted' || event.error === 'canceled') {
             console.warn('[GeminiAudio] Speech was interrupted/canceled, resolving anyway');
             resolve();
           } else {
-            reject(event.error);
+            reject(new Error(`Speech synthesis failed: ${event.error}`));
           }
         };
 
@@ -277,12 +352,33 @@ class GeminiAudioEngine {
 
   /**
    * Play tone as fallback
+   *
+   * Synchronous interface for backward compatibility, but handles AudioContext state properly.
+   * Use this when you need immediate audio feedback without async/await.
+   *
+   * @param frequency - Frequency in Hz
+   * @param duration - Duration in seconds
+   * @param type - Oscillator type (sine, square, sawtooth, triangle)
    */
   playTone(frequency: number, duration: number, type: OscillatorType = 'sine'): void {
-    const ctx = this.getAudioContext();
-    if (!ctx) return;
+    // Skip tone if muted
+    if (this.muted) {
+      console.log('[GeminiAudio] Tone skipped (muted)');
+      return;
+    }
 
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const ctx = this.getAudioContext();
+    if (!ctx) {
+      console.warn('[GeminiAudio] AudioContext not available for tone playback');
+      return;
+    }
+
+    // Resume if suspended (fire-and-forget is acceptable for tones)
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch((error) => {
+        console.error('[GeminiAudio] Failed to resume AudioContext for tone:', error);
+      });
+    }
 
     try {
       const osc = ctx.createOscillator();
@@ -296,7 +392,8 @@ class GeminiAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + duration);
       osc.stop(ctx.currentTime + duration);
     } catch (error) {
-      console.warn('[GeminiAudio] Tone playback error:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('[GeminiAudio] Tone playback error:', errorMsg);
     }
   }
 
@@ -451,6 +548,21 @@ class GeminiAudioEngine {
    */
   isPreloadComplete(): boolean {
     return this.preloadCompleted;
+  }
+
+  /**
+   * Set muted state
+   */
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    console.log(`[GeminiAudio] Muted: ${muted}`);
+  }
+
+  /**
+   * Get muted state
+   */
+  isMuted(): boolean {
+    return this.muted;
   }
 }
 
