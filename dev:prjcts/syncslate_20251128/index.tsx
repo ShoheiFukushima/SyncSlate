@@ -712,6 +712,86 @@ const useSyncEngine = () => {
     };
 };
 
+// --- SHARED MODULE: PRE-ROLL VALUE DISPLAY ---
+
+const PreRollValueDisplay = ({
+    value,
+    onChange,
+    isDark
+}: {
+    value: number;
+    onChange: (value: number) => void;
+    isDark: boolean;
+}) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [inputValue, setInputValue] = useState(value.toString());
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isEditing && inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+        }
+    }, [isEditing]);
+
+    useEffect(() => {
+        setInputValue(value.toString());
+    }, [value]);
+
+    const handleConfirm = () => {
+        const newValue = parseInt(inputValue, 10);
+        if (!isNaN(newValue) && newValue >= 0 && newValue <= 10) {
+            onChange(newValue);
+        } else {
+            setInputValue(value.toString());
+        }
+        setIsEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleConfirm();
+        } else if (e.key === 'Escape') {
+            setInputValue(value.toString());
+            setIsEditing(false);
+        }
+    };
+
+    if (isEditing) {
+        return (
+            <input
+                ref={inputRef}
+                type="number"
+                min="0"
+                max="10"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onBlur={handleConfirm}
+                onKeyDown={handleKeyDown}
+                className={clsx(
+                    "font-mono text-sm font-bold px-3 py-1.5 rounded min-w-[3.5rem] text-center",
+                    "border-2 border-indigo-500 outline-none",
+                    isDark ? "bg-white text-black" : "bg-neutral-900 text-white"
+                )}
+            />
+        );
+    }
+
+    return (
+        <button
+            onClick={() => setIsEditing(true)}
+            className={clsx(
+                "font-mono text-sm font-bold px-3 py-1.5 rounded min-w-[3.5rem] text-center",
+                "transition-all hover:ring-2 hover:ring-indigo-500 hover:ring-opacity-50 cursor-pointer",
+                isDark ? "bg-white text-black" : "bg-neutral-900 text-white"
+            )}
+            title="クリックして手動入力"
+        >
+            {value}
+        </button>
+    );
+};
+
 // --- SHARED MODULE: SLATE OVERLAY ---
 
 const SlateOverlay = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>, theme: Theme }) => {
@@ -1077,11 +1157,11 @@ const ClientView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine
                         </div>
                         <div className="flex justify-between">
                             <span>DURATION:</span>
-                            <span>{engine.settings.duration}s</span>
+                            <span>{engine.settings.duration}</span>
                         </div>
                         <div className="flex justify-between">
                             <span>PRE-ROLL:</span>
-                            <span>{engine.settings.preRoll}s</span>
+                            <span>{engine.settings.preRoll}</span>
                         </div>
                     </div>
                 </div>
@@ -1480,9 +1560,11 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
                         <div className="p-2 bg-emerald-500/10 rounded text-emerald-600"><Clock className="w-4 h-4" /></div>
                         <div className={clsx("font-bold text-sm", textClass)}>Pre-Roll</div>
                     </div>
-                    <div className={clsx("font-mono text-sm font-bold px-3 py-1.5 rounded min-w-[3.5rem] text-center", isDark ? "bg-white text-black" : "bg-neutral-900 text-white")}>
-                      {engine.settings.preRoll}s
-                    </div>
+                    <PreRollValueDisplay
+                        value={engine.settings.preRoll}
+                        onChange={(newValue) => engine.setSettings(s => ({...s, preRoll: newValue}))}
+                        isDark={isDark}
+                    />
                 </div>
 
                 <input
