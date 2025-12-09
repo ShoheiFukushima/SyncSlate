@@ -1368,9 +1368,9 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
 
     return (
         <>
-        <main className="flex-1 min-h-0 overflow-y-auto px-4 py-6 space-y-6 relative z-10 pb-32 max-w-4xl mx-auto w-full">
+        <main className="flex-1 min-h-0 overflow-y-auto px-4 py-6 space-y-6 relative z-10 pb-32">
           {/* Section: Share Session - CRITICAL FOR CLIENT MODE */}
-          <section className="space-y-4">
+          <section className="space-y-4 max-w-4xl mx-auto">
              <div className="flex justify-between items-center pl-1">
                  <div className={clsx("text-[10px] font-mono uppercase tracking-widest", subTextClass)}>// Share with Clients</div>
              </div>
@@ -1422,7 +1422,7 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
           </section>
 
           {/* Section: Recent Activity */}
-          <section className="space-y-4">
+          <section className="space-y-4 max-w-4xl mx-auto">
              <div className="flex justify-between items-center pl-1">
                  <div className={clsx("text-[10px] font-mono uppercase tracking-widest", subTextClass)}>// Recent Activity</div>
              </div>
@@ -1644,7 +1644,7 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
           </section>
 
           {/* Section: Smart Cues */}
-          <section className="space-y-4">
+          <section className="space-y-4 max-w-4xl mx-auto">
              <div className="flex items-center justify-between pl-1">
                  <div className={clsx("text-[10px] font-mono uppercase tracking-widest", subTextClass)}>// Smart Cues</div>
                  <button onClick={() => engine.setSmartCues([...engine.smartCues, { id: generateId(), seconds: 5, text: '' }])} className={clsx("p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800", subTextClass)}><Plus className="w-4 h-4" /></button>
@@ -1673,7 +1673,7 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
           </section>
 
            {/* Section: Colors */}
-           <section className="space-y-4">
+           <section className="space-y-4 max-w-4xl mx-auto">
              <div className="flex items-center justify-between pl-1">
                  <div className={clsx("text-[10px] font-mono uppercase tracking-widest", subTextClass)}>// Color Logic</div>
                  <button onClick={() => engine.setColorRanges([...engine.colorRanges, { id: generateId(), start: 0, end: 10, color: '#3b82f6', textColor: '#ffffff' }])} className={clsx("p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800", subTextClass)}><Plus className="w-4 h-4" /></button>
@@ -1730,7 +1730,7 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
           </section>
 
           {/* Section: Typography */}
-          <section className="space-y-4">
+          <section className="space-y-4 max-w-4xl mx-auto">
              <div className={clsx("text-[10px] font-mono uppercase tracking-widest pl-1", subTextClass)}>// Typography</div>
              <div className={clsx("border rounded-lg p-2 flex items-center justify-between", cardClass)}>
                  <div className="p-2 bg-pink-500/10 rounded text-pink-600"><Type className="w-4 h-4" /></div>
