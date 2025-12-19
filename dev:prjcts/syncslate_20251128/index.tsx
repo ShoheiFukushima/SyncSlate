@@ -25,7 +25,8 @@ import {
   MessageSquare,
   Share2,
   Copy,
-  CheckCircle
+  CheckCircle,
+  Pin
 } from 'lucide-react';
 import clsx from 'clsx';
 import { getGeminiAudioEngine, triggerVoice } from './gemini-api';
@@ -40,6 +41,9 @@ import {
   getSessionIdFromUrl
 } from './services/supabase-sync-engine';
 import type { SyncMode } from './types/sync';
+
+// SMART CUES機能のインポート
+import { useSmartCues } from './hooks/useSmartCues';
 
 // --- Architecture Constants ---
 
@@ -794,9 +798,20 @@ const PreRollValueDisplay = ({
 
 // --- SHARED MODULE: SLATE OVERLAY ---
 
-const SlateOverlay = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>, theme: Theme }) => {
+const SlateOverlay = ({
+  engine,
+  theme,
+  smartCues,
+  onAddPin
+}: {
+  engine: ReturnType<typeof useSyncEngine>;
+  theme: Theme;
+  smartCues: ReturnType<typeof useSmartCues>;
+  onAddPin: (timestamp: number) => void;
+}) => {
     const isDark = theme === 'dark';
     const [isMuted, setIsMuted] = useState<boolean>(false);
+    const [lastPinTime, setLastPinTime] = useState<number>(-1);
 
     const toggleMute = () => {
         const newMutedState = !isMuted;
@@ -911,11 +926,48 @@ const SlateOverlay = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngi
                     {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
                </button>
 
+               {/* Pin Button - HOST only, during COUNTDOWN */}
+               {engine.role === 'HOST' && engine.mode === 'COUNTDOWN' && (() => {
+                 // Calculate main time (elapsed time minus Ready and Pre-roll)
+                 const mainTime = Math.max(0, engine.elapsed - engine.actionStartTime);
+                 const canAddPin = mainTime - lastPinTime >= 1;
+
+                 const handlePinClick = () => {
+                   if (!canAddPin) return; // Prevent rapid clicks
+                   const timestamp = Math.floor(mainTime);
+                   onAddPin(timestamp);
+                   setLastPinTime(mainTime);
+                 };
+
+                 return (
+                   <button
+                     onClick={handlePinClick}
+                     disabled={!canAddPin}
+                     className={clsx(
+                       "fixed bottom-10 left-24 z-50 px-8 py-4 rounded-full backdrop-blur-md border font-bold text-lg tracking-widest uppercase transition-all flex flex-col items-center gap-1 shadow-lg",
+                       canAddPin ? "active:scale-95" : "opacity-50 cursor-not-allowed"
+                     )}
+                     style={{
+                       color: getContrastColor(slateState.bgColor),
+                       backgroundColor: hexToRgba(getContrastColor(slateState.bgColor), 0.1),
+                       borderColor: hexToRgba(getContrastColor(slateState.bgColor), 0.2),
+                       fontFamily: "'Inter', sans-serif"
+                     }}
+                   >
+                     <div className="flex items-center gap-3">
+                       <Pin className="w-5 h-5" />
+                       PIN
+                     </div>
+                     <span className="text-[10px] opacity-50 normal-case tracking-normal font-normal hidden sm:block">(マーカー追加)</span>
+                   </button>
+                 );
+               })()}
+
                {/* CUT Button - HOST only */}
                {engine.role === 'HOST' && (
                  <button
                       onClick={engine.stop}
-                      className="fixed bottom-10 z-50 px-8 py-4 rounded-full backdrop-blur-md border font-bold text-lg tracking-widest uppercase transition-all active:scale-95 flex items-center gap-3 shadow-lg"
+                      className="fixed bottom-10 right-6 z-50 px-8 py-4 rounded-full backdrop-blur-md border font-bold text-lg tracking-widest uppercase transition-all active:scale-95 flex flex-col items-center gap-1 shadow-lg"
                       style={{
                           color: getContrastColor(slateState.bgColor),
                           backgroundColor: hexToRgba(getContrastColor(slateState.bgColor), 0.1),
@@ -923,8 +975,11 @@ const SlateOverlay = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngi
                           fontFamily: "'Inter', sans-serif"
                        }}
                     >
-                      <Square className="w-5 h-5 fill-current" />
-                      CUT
+                      <div className="flex items-center gap-3">
+                        <Square className="w-5 h-5 fill-current" />
+                        CUT
+                      </div>
+                      <span className="text-[10px] opacity-50 normal-case tracking-normal font-normal hidden sm:block">(space)</span>
                  </button>
                )}
              </>
@@ -1413,7 +1468,7 @@ const SettingsModal = ({ engine, theme, onClose }: { engine: ReturnType<typeof u
 
 // --- MODULE: HOST VIEW ---
 
-const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>, theme: Theme }) => {
+const HostView = ({ engine, theme, smartCues }: { engine: ReturnType<typeof useSyncEngine>, theme: Theme, smartCues: ReturnType<typeof useSmartCues> }) => {
     const isDark = theme === 'dark';
     const textClass = isDark ? "text-neutral-100" : "text-neutral-900";
     const subTextClass = isDark ? "text-neutral-500" : "text-neutral-500";
@@ -1729,27 +1784,27 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
           <section className="space-y-4 max-w-4xl mx-auto">
              <div className="flex items-center justify-between pl-1">
                  <div className={clsx("text-[10px] font-mono uppercase tracking-widest", subTextClass)}>// Smart Cues</div>
-                 <button onClick={() => engine.setSmartCues([...engine.smartCues, { id: generateId(), seconds: 5, text: '' }])} className={clsx("p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800", subTextClass)}><Plus className="w-4 h-4" /></button>
+                 <button onClick={() => smartCues.addCue(5)} className={clsx("p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800", subTextClass)}><Plus className="w-4 h-4" /></button>
              </div>
-             {engine.smartCues.map((cue, idx) => (
+             {smartCues.cues.map((cue, idx) => (
                 <div key={cue.id} className={clsx("border rounded-lg p-2 flex gap-2 items-center", cardClass)}>
                    <div className={clsx("w-8 h-8 rounded flex items-center justify-center text-xs font-mono font-bold border", isDark ? "border-neutral-700 bg-neutral-800 text-neutral-400" : "border-neutral-200 bg-neutral-100 text-neutral-500")}>
                       {String(idx + 1).padStart(2, '0')}
                    </div>
-                   <input 
-                     type="number" 
-                     value={cue.seconds}
-                     onChange={(e) => engine.setSmartCues(engine.smartCues.map(c => c.id === cue.id ? { ...c, seconds: parseFloat(e.target.value) } : c))}
+                   <input
+                     type="number"
+                     value={cue.timestamp}
+                     onChange={(e) => smartCues.updateCue(cue.id, { timestamp: parseFloat(e.target.value) })}
                      className={clsx("w-16 rounded px-2 py-1.5 text-sm font-mono text-center border focus:outline-none focus:ring-1 focus:ring-neutral-500", inputClass)}
                    />
-                   <input 
+                   <input
                      type="text"
-                     value={cue.text}
+                     value={cue.text || ''}
                      placeholder="Spoken text..."
-                     onChange={(e) => engine.setSmartCues(engine.smartCues.map(c => c.id === cue.id ? { ...c, text: e.target.value } : c))}
+                     onChange={(e) => smartCues.updateCue(cue.id, { text: e.target.value })}
                      className={clsx("flex-1 rounded px-3 py-1.5 text-sm border focus:outline-none focus:ring-1 focus:ring-neutral-500", inputClass)}
                    />
-                   <button onClick={() => engine.setSmartCues(engine.smartCues.filter(c => c.id !== cue.id))} className="text-neutral-400 hover:text-red-500 p-2"><Trash2 className="w-4 h-4" /></button>
+                   <button onClick={() => smartCues.deleteCue(cue.id)} className="text-neutral-400 hover:text-red-500 p-2"><Trash2 className="w-4 h-4" /></button>
                 </div>
              ))}
           </section>
@@ -1846,14 +1901,15 @@ const HostView = ({ engine, theme }: { engine: ReturnType<typeof useSyncEngine>,
         {/* Footer */}
         <footer className={clsx("fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-md shadow-[0_-1px_10px_rgba(0,0,0,0.05)]", isDark ? "bg-neutral-900/90 border-neutral-800" : "bg-white/90 border-neutral-200")}>
            <div className="max-w-4xl mx-auto w-full p-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
-              <button 
+              <button
                 onClick={engine.start}
                 className={clsx(
-                    "w-full rounded-lg text-white font-bold text-sm uppercase tracking-widest shadow-sm flex items-center justify-center gap-2 p-3 transition-transform active:scale-[0.98] duration-75",
+                    "w-full rounded-lg text-white font-bold text-sm uppercase tracking-widest shadow-sm flex flex-col items-center justify-center gap-0.5 p-3 transition-transform active:scale-[0.98] duration-75",
                     isDark ? "bg-indigo-600 hover:bg-indigo-500" : "bg-neutral-900 hover:bg-neutral-800"
                 )}
               >
-                Start Sequence
+                <span>Start Sequence</span>
+                <span className="text-[10px] opacity-50 normal-case tracking-normal font-normal hidden sm:block">(space)</span>
               </button>
            </div>
         </footer>
@@ -1867,7 +1923,10 @@ const App = () => {
   const [theme, setTheme] = useState<Theme>('light');
   const [showSettings, setShowSettings] = useState(false);
   const engine = useSyncEngine();
-  
+
+  // SMART CUES機能
+  const smartCues = useSmartCues();
+
   const isDark = theme === 'dark';
   const bgClass = isDark ? "bg-neutral-950" : "bg-neutral-50";
   const gridClass = isDark
@@ -1945,7 +2004,7 @@ const App = () => {
 
         {/* View Switching Logic */}
         {engine.role === 'HOST' ? (
-            <HostView engine={engine} theme={theme} />
+            <HostView engine={engine} theme={theme} smartCues={smartCues} />
         ) : (
             <ClientView engine={engine} theme={theme} />
         )}
@@ -1956,7 +2015,12 @@ const App = () => {
         )}
 
         {/* Shared Overlay (Always active, controlled by mode) */}
-        <SlateOverlay engine={engine} theme={theme} />
+        <SlateOverlay
+          engine={engine}
+          theme={theme}
+          smartCues={smartCues}
+          onAddPin={smartCues.addCue}
+        />
 
       </div>
   );
